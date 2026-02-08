@@ -371,7 +371,7 @@ export default function App() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.brand}>FLEETGUARDIAN</Text>
-          <Text style={styles.model}>TACTICAL UNIT v2.2 // ID: {isUUID(vehicleId) ? vehicleId.split('-')[0] : 'UPLINK_OFF'}</Text>
+          <Text style={styles.model}>ACTIVE UNIT // {plateNumber || 'UNASSIGNED'}</Text>
         </View>
         <View style={styles.statusBadge}>
           <View style={[styles.dot, { backgroundColor: isLinked ? (isStreaming ? '#f59e0b' : '#10b981') : '#f43f5e' }]} />
