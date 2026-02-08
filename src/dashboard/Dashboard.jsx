@@ -22,7 +22,7 @@ function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [stats, setStats] = useState({ online: 0, moving: 0, alert: 0 })
     const [showAddVehicle, setShowAddVehicle] = useState(false)
-    const [newVehicle, setNewVehicle] = useState({ license_plate: '', vehicle_name: '' })
+    const [newVehicle, setNewVehicle] = useState({ license_plate: '', vehicle_name: '', stream_url: '' })
     const [selectedVehicle, setSelectedVehicle] = useState(null)
     const [telemetry, setTelemetry] = useState([])
     const [media, setMedia] = useState([])
@@ -153,11 +153,12 @@ function Dashboard() {
         const { error } = await supabase.from('vehicles').insert({
             license_plate: newVehicle.license_plate.toUpperCase(),
             vehicle_name: newVehicle.vehicle_name,
+            stream_url: newVehicle.stream_url,
             status: 'active'
         })
         if (!error) {
             setShowAddVehicle(false)
-            setNewVehicle({ license_plate: '', vehicle_name: '' })
+            setNewVehicle({ license_plate: '', vehicle_name: '', stream_url: '' })
         }
     }
 
@@ -206,6 +207,7 @@ function Dashboard() {
 
                         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
                             <NavItem icon={<MapIcon size={18} />} label="Live Tactical" active={activeTab === 'live'} onClick={() => { setActiveTab('live'); setIsSidebarOpen(false); }} />
+                            <NavItem icon={<Activity size={18} />} label="Survue Watch" active={activeTab === 'stream'} onClick={() => { setActiveTab('stream'); setIsSidebarOpen(false); }} />
                             <NavItem icon={<Truck size={18} />} label="Fleet Assets" active={activeTab === 'vehicles'} onClick={() => { setActiveTab('vehicles'); setIsSidebarOpen(false); }} />
                             <NavItem icon={<History size={18} />} label="Telemetry" active={activeTab === 'history'} onClick={() => { setActiveTab('history'); setIsSidebarOpen(false); }} />
                             <NavItem icon={<AlertCircle size={18} />} label="Alert Matrix" active={activeTab === 'incidents'} onClick={() => { setActiveTab('incidents'); setIsSidebarOpen(false); }} badge={notifications.length > 0 ? notifications.length.toString() : null} />
@@ -284,6 +286,11 @@ function Dashboard() {
                                                     </span>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2 mt-4">
+                                                    {v.stream_url && (
+                                                        <button onClick={() => { setSelectedVehicle(v); setActiveTab('stream'); }} className="col-span-2 p-2 bg-emerald-600 text-white rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-emerald-500/20 mb-1">
+                                                            <Activity size={14} /> View Live Stream
+                                                        </button>
+                                                    )}
                                                     <button onClick={() => broadcastCommand(v.id, 'START_LIVE_FEED')} title="Start Surveillance" className="p-2 bg-emerald-600/20 text-emerald-400 rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-emerald-500/20">
                                                         <Activity size={14} /> Start
                                                     </button>
@@ -412,6 +419,34 @@ function Dashboard() {
                         {media.length === 0 && <div className="col-span-full py-20 text-center text-slate-600 uppercase font-black tracking-widest">No tactical captures available</div>}
                     </div>
                 )}
+                {activeTab === 'stream' && (
+                    <div className="space-y-6">
+                        <div className="glass p-8 rounded-[40px] border-white/5">
+                            <h3 className="text-2xl font-black mb-6 uppercase tracking-tighter">Tactical Surveillance Monitor</h3>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div className="lg:col-span-2 aspect-video bg-black rounded-3xl overflow-hidden border border-white/5 relative">
+                                    {selectedVehicle?.stream_url ? (
+                                        <iframe src={selectedVehicle.stream_url} className="w-full h-full border-none" title="Vehicle Stream" />
+                                    ) : (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 space-y-4">
+                                            <Camera size={48} />
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Active Link // Select Vehicle with Stream URL</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="space-y-4">
+                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 pb-2">Active Targets</h4>
+                                    {vehicles.filter(v => v.stream_url).map(v => (
+                                        <button key={v.id} onClick={() => setSelectedVehicle(v)} className={`w-full p-4 rounded-2xl flex items-center justify-between border transition-all ${selectedVehicle?.id === v.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'}`}>
+                                            <span className="text-[10px] font-black">{v.license_plate}</span>
+                                            <Activity size={14} className={selectedVehicle?.id === v.id ? 'animate-pulse' : ''} />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
 
             {/* Modals */}
@@ -429,6 +464,10 @@ function Dashboard() {
                                 <div className="space-y-2">
                                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">Operator Name</label>
                                     <input value={newVehicle.vehicle_name} onChange={e => setNewVehicle({ ...newVehicle, vehicle_name: e.target.value })} type="text" placeholder="COMMANDER NAME" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-slate-200 outline-none focus:border-blue-500/50" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">IP Camera URL (Optional)</label>
+                                    <input value={newVehicle.stream_url} onChange={e => setNewVehicle({ ...newVehicle, stream_url: e.target.value })} type="text" placeholder="http://192.168.1.10:8080/video" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-emerald-400 font-mono outline-none focus:border-blue-500/50" />
                                 </div>
                                 <button onClick={handleAddVehicle} className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl shadow-blue-600/20 uppercase tracking-widest text-xs mt-4">Confirm Deployment</button>
                             </div>
