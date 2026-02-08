@@ -49,6 +49,8 @@ export default function App() {
     const context = JSON.parse(contextStr || '{}');
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
+      organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+      branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
       event_type: 'ALERT',
       meta: { ...meta, alert_type: type, timestamp: new Date().toISOString() }
     });
@@ -352,6 +354,8 @@ export default function App() {
 
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
+      organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+      branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
       event_type: 'SOS',
       meta: { lat: loc.coords.latitude, lng: loc.coords.longitude }
     });
@@ -470,6 +474,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       if (currentSpeed > 100) {
         await supabase.from('events').insert({
           vehicle_id: vehicleId,
+          organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+          branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
           event_type: 'ALERT',
           meta: { alert_type: 'SPEED_VIOLATION', speed: currentSpeed, timestamp: new Date().toISOString() }
         });
@@ -477,7 +483,10 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
       await supabase.from('vehicles').update({
         last_seen: new Date().toISOString(),
-        status: (location.coords.speed || 0) > 2 ? 'moving' : 'active'
+        status: (location.coords.speed || 0) > 2 ? 'moving' : 'active',
+        // Critical for some RLS policies on update
+        organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+        branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
       }).eq('id', vehicleId);
     }
   }
