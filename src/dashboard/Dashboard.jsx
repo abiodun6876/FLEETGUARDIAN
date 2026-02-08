@@ -16,6 +16,13 @@ L.Icon.Default.mergeOptions({
 });
 
 function Dashboard() {
+    const [activeTab, setActiveTab] = useState('live')
+    const [vehicles, setVehicles] = useState([])
+    const [notifications, setNotifications] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [stats, setStats] = useState({ online: 0, moving: 0, alert: 0 })
+    const [showAddVehicle, setShowAddVehicle] = useState(false)
+    const [newVehicle, setNewVehicle] = useState({ plate_number: '', driver_name: '' })
     const [selectedVehicle, setSelectedVehicle] = useState(null)
     const [telemetry, setTelemetry] = useState([])
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
