@@ -114,10 +114,8 @@ function Dashboard() {
         const streamSub = supabase
             .channel('tactical-stream')
             .on('broadcast', { event: 'frame' }, payload => {
-                if (payload.payload.vId === selectedVehicle?.id) {
-                    setTacticalFeed(payload.payload.image)
-                    setIsStreaming(true)
-                }
+                setTacticalFeed(payload.payload.image)
+                setIsStreaming(true)
             })
             .subscribe()
 
@@ -445,6 +443,9 @@ function Dashboard() {
                                             <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 bg-rose-600 rounded-full">
                                                 <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                                                 <span className="text-[10px] font-black uppercase text-white">Live Tactical</span>
+                                            </div>
+                                            <div className="absolute bottom-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10">
+                                                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">{selectedVehicle?.license_plate}</p>
                                             </div>
                                         </div>
                                     ) : selectedVehicle?.stream_url ? (
