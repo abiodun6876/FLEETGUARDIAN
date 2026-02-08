@@ -8,6 +8,13 @@ function Home() {
 
     return (
         <div className="min-h-screen bg-[#020408] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+            {/* Config Warning */}
+            {import.meta.env.VITE_SUPABASE_URL === undefined && (
+                <div className="fixed top-0 inset-x-0 z-[100] bg-rose-600 text-white p-2 text-center text-[10px] font-black uppercase tracking-widest animate-pulse">
+                    ⚠️ Configuration Required: Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Netlify Environment Variables
+                </div>
+            )}
+
             {/* Background Decor */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
