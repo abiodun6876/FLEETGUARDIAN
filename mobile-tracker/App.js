@@ -18,7 +18,7 @@ export default function App() {
   const [battery, setBattery] = useState(100);
   const [isLinked, setIsLinked] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const cameraRef = useRef(null);
+  const cameraUnitRef = useRef(null);
   const recordingRef = useRef(null);
   const streamInterval = useRef(null);
   const streamChannel = useRef(null);
@@ -141,9 +141,9 @@ export default function App() {
   };
 
   const takeSnapshot = async () => {
-    if (cameraRef.current) {
+    if (cameraUnitRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync({
+        const photo = await cameraUnitRef.current.takePictureAsync({
           quality: 0.3,
           base64: true,
           scale: 0.5
@@ -172,9 +172,9 @@ export default function App() {
     }
 
     streamInterval.current = setInterval(async () => {
-      if (cameraRef.current) {
+      if (cameraUnitRef.current) {
         try {
-          const photo = await cameraRef.current.takePictureAsync({
+          const photo = await cameraUnitRef.current.takePictureAsync({
             quality: 0.1,
             base64: true,
             scale: 0.3
@@ -261,6 +261,11 @@ export default function App() {
     const contextStr = await AsyncStorage.getItem('org_context');
     const context = JSON.parse(contextStr || '{}');
 
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId)) {
+      addLog('ERROR: INVALID_UUID_FORMAT');
+      return;
+    }
+
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
       organization_id: context.organization_id,
@@ -341,7 +346,7 @@ export default function App() {
 
           {/* Hidden Camera Component for Snapshots/Streaming */}
           <Camera.CameraView
-            ref={cameraRef}
+            ref={cameraUnitRef}
             style={{ width: 1, height: 1, opacity: 0.1 }}
             facing="back"
           />
@@ -366,7 +371,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     const contextStr = await AsyncStorage.getItem('org_context');
     const context = JSON.parse(contextStr || '{}');
 
-    if (vehicleId) {
+    if (vehicleId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId)) {
       await supabase.from('locations').insert({
         vehicle_id: vehicleId,
         organization_id: context.organization_id,

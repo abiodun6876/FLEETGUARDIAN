@@ -126,7 +126,16 @@ function App() {
         })
     }
 
+    const isUUID = (str) => {
+        const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return regex.test(str);
+    }
+
     const requestStreaming = async (vId, active) => {
+        if (!isUUID(vId)) {
+            console.warn(`ABORT: Vehicle ID ${vId} is not a valid UUID. Check database schema.`);
+            return;
+        }
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: active ? 'START_LIVE_FEED' : 'STOP_LIVE_FEED',
@@ -139,6 +148,11 @@ function App() {
     }
 
     const requestCapture = async (vId) => {
+        if (!isUUID(vId)) {
+            console.warn(`ABORT: Vehicle ID ${vId} is not a valid UUID. Check database schema.`);
+            alert(`Error: Vehicle ID "${vId}" is not a valid UUID. Please use UUIDs in your database.`);
+            return;
+        }
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: 'CAPTURE_REQUEST',
