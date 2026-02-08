@@ -18,6 +18,7 @@ export default function App() {
   const [battery, setBattery] = useState(100);
   const [isLinked, setIsLinked] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const cameraRef = useRef(null);
   const recordingRef = useRef(null);
   const streamInterval = useRef(null);
   const streamChannel = useRef(null);
