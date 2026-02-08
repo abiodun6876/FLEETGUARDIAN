@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
+
+@layer base {
+    :root {
+        --bg-color: #020408;
+        --sidebar-bg: #0a0d12;
+        --panel-bg: rgba(16, 20, 28, 0.7);
+        --accent: #3b82f6;
+        --accent-glow: rgba(59, 130, 246, 0.3);
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --glass-border: rgba(255, 255, 255, 0.08);
+    }
+
+    body {
+        @apply bg-[#020408] text-slate-50 antialiased overflow-x-hidden;
+        font-family: 'Inter', sans-serif;
+    }
+}
+
+@layer components {
+    .glass {
+        @apply bg-[#10141c]/70 backdrop-blur-2xl border border-white/10 rounded-2xl;
+    }
+
+    .title-font {
+        font-family: 'Outfit', sans-serif;
+    }
+
+    .leaflet-container {
+        @apply !bg-[#0a0d12] rounded-2xl border border-white/5;
+    }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Custom Animations */
+@keyframes scan {
+    0% {
+        transform: translateY(0);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    90% {
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateY(100vh);
+        opacity: 0;
+    }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.tactical-popup .leaflet-popup-content-wrapper {
+    background: transparent;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+}
+
+.tactical-popup .leaflet-popup-tip-container {
+    display: none;
+}

@@ -1,0 +1,9 @@
+# For the Dashboard
+cd dashboard
+npm install
+npm run dev
+
+# For the Vehicle App
+cd device-app
+npm install
+npm run dev

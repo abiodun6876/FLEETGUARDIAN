@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
+
+@layer base {
+  :root {
+    --bg-color: #05070a;
+    --panel-bg: rgba(13, 17, 23, 0.8);
+    --accent: #10b981;
+    --accent-glow: rgba(16, 185, 129, 0.3);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --danger: #ef4444;
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+
+  body {
+    @apply bg-[#05070a] text-slate-50 antialiased overflow-hidden h-[100dvh] w-screen;
+    font-family: 'Inter', sans-serif;
+  }
+
+  #root {
+    @apply h-full;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-[#0d1117]/80 backdrop-blur-xl border border-white/10 rounded-2xl;
+  }
+
+  .title-font {
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .btn-primary {
+    @apply bg-[#10b981] text-black px-6 py-3 rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.3);
+  }
+
+  .neon-card {
+    @apply border-l-4 border-[#10b981];
+  }
+}
+
+/* Custom Leaflet overrides since Tailwind won't handle these easily */
+.leaflet-container {
+  @apply rounded-xl border border-white/10 !bg-[#0d1117];
+}
+
+.leaflet-control-zoom {
+  @apply !border-none !shadow-lg;
+}
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+  @apply !bg-[#1a1f26] !text-white !border-white/10;
+}
+
+.leaflet-control-zoom-in:hover,
+.leaflet-control-zoom-out:hover {
+  @apply !bg-[#2a2f36];
+}
