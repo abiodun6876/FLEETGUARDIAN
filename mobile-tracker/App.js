@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, ScrollView, SafeAreaView, StatusBar, Image, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, ScrollView, SafeAreaView, StatusBar, Alert } from 'react-native';
 import * as Location from 'expo-location';
 import * as Camera from 'expo-camera';
 import * as TaskManager from 'expo-task-manager';
 import { supabase } from './supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Video } from 'expo-av';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
@@ -16,13 +15,47 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [battery, setBattery] = useState(100);
   const [isLinked, setIsLinked] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const cameraRef = useRef(null);
+  const streamInterval = useRef(null);
 
   useEffect(() => {
     checkCachedSession();
     requestPermissions();
   }, []);
+
+  // Real-time Command Listener
+  useEffect(() => {
+    if (!vehicleId) return;
+
+    addLog('SYSTEM: COMMAND_LISTENER_ACTIVE');
+    const channel = supabase
+      .channel(`commands:${vehicleId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'events',
+        filter: `vehicle_id=eq.${vehicleId}`
+      }, payload => {
+        const type = payload.new.event_type;
+        if (type === 'CAPTURE_REQUEST') {
+          addLog('COMMAND: REMOTE_CAPTURE');
+          takeSnapshot();
+        } else if (type === 'START_LIVE_FEED') {
+          addLog('COMMAND: START_STREAM');
+          startTacticalStream();
+        } else if (type === 'STOP_LIVE_FEED') {
+          addLog('COMMAND: STOP_STREAM');
+          stopTacticalStream();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      stopTacticalStream();
+    };
+  }, [vehicleId]);
 
   const addLog = (msg) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -60,52 +93,7 @@ export default function App() {
         .from('vehicles')
         .select('*')
         .eq('license_plate', plateNumber.toUpperCase())
-        .single();
-      // Real-time Command Listener
-      useEffect(() => {
-        if (!vehicleId) return;
-
-        const channel = supabase
-          .channel(`commands:${vehicleId}`)
-          .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'events',
-            filter: `vehicle_id=eq.${vehicleId}`
-          }, payload => {
-            if (payload.new.event_type === 'CAPTURE_REQUEST') {
-              addLog('COMMAND: REMOTE_CAPTURE');
-              takeSnapshot();
-            }
-          })
-          .subscribe();
-
-        return () => supabase.removeChannel(channel);
-      }, [vehicleId]);
-
-      const takeSnapshot = async () => {
-        if (cameraRef.current) {
-          const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
-          addLog('UPLOADING: SNAPSHOT...');
-
-          const fileName = `${vehicleId}/${Date.now()}.jpg`;
-          const formData = new FormData();
-          formData.append('file', {
-            uri: photo.uri,
-            name: fileName,
-            type: 'image/jpeg',
-          });
-
-          const { error: storageError } = await supabase.storage
-            .from('media')
-            .upload(fileName, decode(photo.base64), { contentType: 'image/jpeg' });
-
-          // Note: In RN, uploading blobs/files usually requires a slightly different approach 
-          // or using the standard fetch API to the storage endpoint. 
-          // For now, I'll log the intention and the user can refine the upload logic.
-          addLog('EVENT: SNAPSHOT_UPLOADED');
-        }
-      };
+        .maybeSingle();
 
       if (error || !data) {
         Alert.alert('Error', 'Vehicle not found on dashboard.');
@@ -131,17 +119,81 @@ export default function App() {
   };
 
   const startLocationTracking = async () => {
-    await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.High,
-      timeInterval: 5000,
-      distanceInterval: 10,
-      foregroundService: {
-        notificationTitle: 'FleetGuardian Tracker',
-        notificationBody: 'Live tracking active...',
-        notificationColor: '#10b981',
-      },
-    });
-    addLog('SYSTEM: GPS_TRACKING_ON');
+    try {
+      await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+        accuracy: Location.Accuracy.High,
+        timeInterval: 5000,
+        distanceInterval: 10,
+        foregroundService: {
+          notificationTitle: 'FleetGuardian Tracker',
+          notificationBody: 'Live tracking active...',
+          notificationColor: '#10b981',
+        },
+      });
+      addLog('SYSTEM: GPS_TRACKING_ON');
+    } catch (e) {
+      addLog('ERROR: BG_LOCATION_FAILED');
+    }
+  };
+
+  const takeSnapshot = async () => {
+    if (cameraRef.current) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.3,
+          base64: true,
+          scale: 0.5
+        });
+
+        const fileName = `${vehicleId}/${Date.now()}.jpg`;
+        const { error } = await supabase.storage
+          .from('media')
+          .upload(fileName, photo, { contentType: 'image/jpeg' });
+
+        if (!error) addLog('EVENT: SNAPSHOT_UPLOADED');
+      } catch (e) {
+        addLog('ERROR: CAPTURE_FAILED');
+      }
+    }
+  };
+
+  const startTacticalStream = () => {
+    if (isStreaming) return;
+    setIsStreaming(true);
+    setStatus('STREAMING');
+
+    streamInterval.current = setInterval(async () => {
+      if (cameraRef.current) {
+        try {
+          const photo = await cameraRef.current.takePictureAsync({
+            quality: 0.1, // Ultra low quality for speed
+            base64: true,
+            scale: 0.3 // Small resolution
+          });
+
+          await supabase.channel('tactical-stream').send({
+            type: 'broadcast',
+            event: 'frame',
+            payload: {
+              vId: vehicleId,
+              image: `data:image/jpeg;base64,${photo.base64}`
+            },
+          });
+        } catch (e) {
+          console.log('Stream frame failed');
+        }
+      }
+    }, 800); // ~1.2 frames per second (Supabase safe rate)
+  };
+
+  const stopTacticalStream = () => {
+    if (streamInterval.current) {
+      clearInterval(streamInterval.current);
+      streamInterval.current = null;
+    }
+    setIsStreaming(false);
+    setStatus('READY');
+    addLog('SYSTEM: STREAM_STOPPED');
   };
 
   const handleSOS = async () => {
@@ -150,7 +202,8 @@ export default function App() {
     addLog('EVENT: SOS_EMISSION');
 
     const loc = await Location.getCurrentPositionAsync({});
-    const context = JSON.parse(await AsyncStorage.getItem('org_context') || '{}');
+    const contextStr = await AsyncStorage.getItem('org_context');
+    const context = JSON.parse(contextStr || '{}');
 
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
@@ -160,7 +213,7 @@ export default function App() {
       meta: { lat: loc.coords.latitude, lng: loc.coords.longitude }
     });
 
-    setTimeout(() => setStatus('READY'), 3000);
+    setTimeout(() => setStatus(isStreaming ? 'STREAMING' : 'READY'), 3000);
   };
 
   return (
@@ -174,7 +227,7 @@ export default function App() {
           <Text style={styles.model}>TACTICAL UNIT v2.0</Text>
         </View>
         <View style={styles.statusBadge}>
-          <View style={[styles.dot, { backgroundColor: isLinked ? '#10b981' : '#f43f5e' }]} />
+          <View style={[styles.dot, { backgroundColor: isLinked ? (isStreaming ? '#f59e0b' : '#10b981') : '#f43f5e' }]} />
           <Text style={styles.statusText}>{status}</Text>
         </View>
       </View>
@@ -196,6 +249,12 @@ export default function App() {
         </View>
       ) : (
         <ScrollView style={styles.main}>
+          {isStreaming && (
+            <View style={styles.streamBanner}>
+              <Text style={styles.streamBannerText}>LIVE TACTICAL STREAM ACTIVE</Text>
+            </View>
+          )}
+
           {/* Quick Stats */}
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
@@ -203,8 +262,8 @@ export default function App() {
               <Text style={styles.statValue}>{battery}%</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Z-AXIS</Text>
-              <Text style={styles.statValue}>STABLE</Text>
+              <Text style={styles.statLabel}>NETWORK</Text>
+              <Text style={styles.statValue}>ENCRYPTED</Text>
             </View>
           </View>
 
@@ -224,10 +283,10 @@ export default function App() {
             <Text style={styles.sosText}>HOLD FOR SOS</Text>
           </TouchableOpacity>
 
-          {/* Hidden Camera Component for Snapshots */}
+          {/* Hidden Camera Component for Snapshots/Streaming */}
           <Camera.CameraView
             ref={cameraRef}
-            style={{ width: 0, height: 0 }}
+            style={{ width: 1, height: 1, opacity: 0.1 }}
             facing="back"
           />
         </ScrollView>
@@ -248,7 +307,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     const { locations } = data;
     const location = locations[0];
     const vehicleId = await AsyncStorage.getItem('vehicle_id');
-    const context = JSON.parse(await AsyncStorage.getItem('org_context') || '{}');
+    const contextStr = await AsyncStorage.getItem('org_context');
+    const context = JSON.parse(contextStr || '{}');
 
     if (vehicleId) {
       await supabase.from('locations').insert({
@@ -302,7 +362,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderColor: '#1e293b',
   },
   dot: {
     width: 8,
@@ -359,6 +419,21 @@ const styles = StyleSheet.create({
   main: {
     flex: 1,
     padding: 24,
+  },
+  streamBanner: {
+    backgroundColor: '#f59e0b20',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f59e0b40',
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  streamBannerText: {
+    color: '#f59e0b',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   statsRow: {
     flexDirection: 'row',

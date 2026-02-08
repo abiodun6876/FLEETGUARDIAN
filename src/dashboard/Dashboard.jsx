@@ -26,6 +26,8 @@ function Dashboard() {
     const [selectedVehicle, setSelectedVehicle] = useState(null)
     const [telemetry, setTelemetry] = useState([])
     const [media, setMedia] = useState([])
+    const [tacticalFeed, setTacticalFeed] = useState(null)
+    const [isStreaming, setIsStreaming] = useState(false)
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
     // Fetch initial data
@@ -108,11 +110,23 @@ function Dashboard() {
             })
             .subscribe()
 
+        // Tactical Stream Listener
+        const streamSub = supabase
+            .channel('tactical-stream')
+            .on('broadcast', { event: 'frame' }, payload => {
+                if (payload.payload.vId === selectedVehicle?.id) {
+                    setTacticalFeed(payload.payload.image)
+                    setIsStreaming(true)
+                }
+            })
+            .subscribe()
+
         return () => {
             supabase.removeChannel(locSub)
             supabase.removeChannel(eventSub)
             supabase.removeChannel(vehicleSub)
             supabase.removeChannel(mediaSub)
+            supabase.removeChannel(streamSub)
         }
     }, [])
 
@@ -425,12 +439,20 @@ function Dashboard() {
                             <h3 className="text-2xl font-black mb-6 uppercase tracking-tighter">Tactical Surveillance Monitor</h3>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-2 aspect-video bg-black rounded-3xl overflow-hidden border border-white/5 relative">
-                                    {selectedVehicle?.stream_url ? (
+                                    {tacticalFeed ? (
+                                        <div className="w-full h-full relative">
+                                            <img src={tacticalFeed} className="w-full h-full object-contain" alt="Tactical Feed" />
+                                            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 bg-rose-600 rounded-full">
+                                                <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                                <span className="text-[10px] font-black uppercase text-white">Live Tactical</span>
+                                            </div>
+                                        </div>
+                                    ) : selectedVehicle?.stream_url ? (
                                         <iframe src={selectedVehicle.stream_url} className="w-full h-full border-none" title="Vehicle Stream" />
                                     ) : (
                                         <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 space-y-4">
                                             <Camera size={48} />
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Active Link // Select Vehicle with Stream URL</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em]">Stream Offline // Awaiting Link</p>
                                         </div>
                                     )}
                                 </div>
