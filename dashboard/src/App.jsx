@@ -39,8 +39,13 @@ function App() {
                         .eq('vehicle_id', v.id)
                         .order('created_at', { ascending: false })
                         .limit(1)
-                        .single()
-                    return { ...v, ...(loc || { lat: 6.45, lng: 3.4, speed: 0 }) }
+                        .maybeSingle()
+                    return {
+                        ...v,
+                        lat: loc?.lat || 6.45,
+                        lng: loc?.lng || 3.4,
+                        speed: loc?.speed || 0
+                    }
                 }))
                 setVehicles(enriched)
                 updateStats(enriched)
@@ -140,6 +145,8 @@ function App() {
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: active ? 'START_LIVE_FEED' : 'STOP_LIVE_FEED',
+            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321', // Critical for RLS/Sync
+            branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d',
             meta: { requested_by: 'COMMANDER_NAVY' }
         })
         if (active) {
@@ -161,6 +168,8 @@ function App() {
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: 'CAPTURE_REQUEST',
+            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+            branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d',
             meta: { requested_by: 'COMMANDER_ALPHA' }
         })
         alert('Capture Command Broadcasted')

@@ -49,8 +49,8 @@ export default function App() {
     const context = JSON.parse(contextStr || '{}');
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
-      organization_id: context.organization_id,
-      branch_id: context.branch_id,
+      organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+      branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
       event_type: 'ALERT',
       meta: { ...meta, alert_type: type, timestamp: new Date().toISOString() }
     });
@@ -297,8 +297,8 @@ export default function App() {
 
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
-      organization_id: context.organization_id,
-      branch_id: context.branch_id,
+      organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+      branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
       event_type: 'SOS',
       meta: { lat: loc.coords.latitude, lng: loc.coords.longitude }
     });
@@ -312,9 +312,9 @@ export default function App() {
 
       {/* Header HUD */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.brand}>FLEETGUARDIAN</Text>
-          <Text style={styles.model}>TACTICAL UNIT v2.0</Text>
+          <Text style={styles.model}>TACTICAL UNIT v2.1 // ID: {vehicleId ? vehicleId.split('-')[0] : 'UPLINK_OFF'}</Text>
         </View>
         <View style={styles.statusBadge}>
           <View style={[styles.dot, { backgroundColor: isLinked ? (isStreaming ? '#f59e0b' : '#10b981') : '#f43f5e' }]} />
@@ -401,25 +401,20 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     const context = JSON.parse(contextStr || '{}');
 
     if (vehicleId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId)) {
-      const batteryLevel = await AsyncStorage.getItem('last_battery_level') || '100';
-
       await supabase.from('locations').insert({
         vehicle_id: vehicleId,
-        organization_id: context.organization_id,
-        branch_id: context.branch_id,
         lat: location.coords.latitude,
         lng: location.coords.longitude,
         speed: (location.coords.speed || 0) * 3.6,
-        heading: location.coords.heading || 0,
-        meta: { battery: parseInt(batteryLevel) }
+        heading: location.coords.heading || 0
       });
 
       const currentSpeed = (location.coords.speed || 0) * 3.6;
       if (currentSpeed > 100) {
         await supabase.from('events').insert({
           vehicle_id: vehicleId,
-          organization_id: context.organization_id,
-          branch_id: context.branch_id,
+          organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+          branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
           event_type: 'ALERT',
           meta: { alert_type: 'SPEED_VIOLATION', speed: currentSpeed, timestamp: new Date().toISOString() }
         });
@@ -427,8 +422,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
       await supabase.from('vehicles').update({
         last_seen: new Date().toISOString(),
-        status: (location.coords.speed || 0) > 2 ? 'moving' : 'active',
-        meta: { battery: parseInt(batteryLevel) }
+        status: (location.coords.speed || 0) > 2 ? 'moving' : 'active'
       }).eq('id', vehicleId);
     }
   }
