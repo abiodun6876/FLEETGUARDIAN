@@ -142,7 +142,11 @@ function Terminal() {
     const startCamera = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' },
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
                 audio: true
             })
             if (videoRef.current) {
@@ -168,7 +172,7 @@ function Terminal() {
             // If camera isn't active, try to start it briefly
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' },
+                    video: { facingMode: { ideal: 'environment' } },
                     audio: true
                 })
                 const video = document.createElement('video')

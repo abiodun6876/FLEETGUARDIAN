@@ -39,7 +39,7 @@ function Dashboard() {
                         .eq('vehicle_id', v.id)
                         .order('created_at', { ascending: false })
                         .limit(1)
-                        .single()
+                        .maybeSingle()
                     return { ...v, ...(loc || { lat: 6.45, lng: 3.4, speed: 0 }) }
                 }))
                 setVehicles(enriched)
