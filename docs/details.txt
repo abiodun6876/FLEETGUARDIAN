@@ -5,5 +5,7 @@ npm run dev
 
 # For the Vehicle App
 cd device-app
+npx expo start
+cd mobile-tracker
 npm install
-npm run dev
+npx expo start
