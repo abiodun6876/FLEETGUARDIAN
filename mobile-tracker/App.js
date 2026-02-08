@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, TouchableOpacity, TextInput, ScrollView, SafeAr
 import * as Location from 'expo-location';
 import * as Camera from 'expo-camera';
 import * as TaskManager from 'expo-task-manager';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { supabase } from './supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -16,8 +18,9 @@ export default function App() {
   const [battery, setBattery] = useState(100);
   const [isLinked, setIsLinked] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const cameraRef = useRef(null);
+  const recordingRef = useRef(null);
   const streamInterval = useRef(null);
+  const streamChannel = useRef(null);
 
   useEffect(() => {
     checkCachedSession();
@@ -162,16 +165,21 @@ export default function App() {
     setIsStreaming(true);
     setStatus('STREAMING');
 
+    if (!streamChannel.current) {
+      streamChannel.current = supabase.channel('tactical-stream');
+      streamChannel.current.subscribe();
+    }
+
     streamInterval.current = setInterval(async () => {
       if (cameraRef.current) {
         try {
           const photo = await cameraRef.current.takePictureAsync({
-            quality: 0.1, // Ultra low quality for speed
+            quality: 0.1,
             base64: true,
-            scale: 0.3 // Small resolution
+            scale: 0.3
           });
 
-          await supabase.channel('tactical-stream').send({
+          streamChannel.current.send({
             type: 'broadcast',
             event: 'frame',
             payload: {
@@ -180,16 +188,63 @@ export default function App() {
             },
           });
         } catch (e) {
-          console.log('Stream frame failed');
+          console.log('Stream frame failed', e);
         }
       }
-    }, 800); // ~1.2 frames per second (Supabase safe rate)
+    }, 600);
+
+    // Audio Streaming
+    startAudioRecording();
+  };
+
+  const startAudioRecording = async () => {
+    try {
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
+      recordingRef.current = recording;
+
+      addLog('SYSTEM: AUDIO_LINK_ON');
+
+      // Periodically snip and send
+      const audioSendInterval = setInterval(async () => {
+        if (!isStreaming) {
+          clearInterval(audioSendInterval);
+          return;
+        }
+        try {
+          await recordingRef.current.stopAndUnloadAsync();
+          const uri = recordingRef.current.getURI();
+          const base64Audio = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+
+          streamChannel.current.send({
+            type: 'broadcast',
+            event: 'audio',
+            payload: {
+              vId: vehicleId,
+              audio: `data:audio/m4a;base64,${base64Audio}`
+            }
+          });
+
+          // Restart recording
+          const { recording: nextRec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
+          recordingRef.current = nextRec;
+        } catch (err) {
+          console.log('Audio snip failed');
+        }
+      }, 3000); // 3 second audio chips
+    } catch (err) {
+      addLog('ERROR: AUDIO_FAILED');
+    }
   };
 
   const stopTacticalStream = () => {
     if (streamInterval.current) {
       clearInterval(streamInterval.current);
       streamInterval.current = null;
+    }
+    if (recordingRef.current) {
+      recordingRef.current.stopAndUnloadAsync();
+      recordingRef.current = null;
     }
     setIsStreaming(false);
     setStatus('READY');

@@ -53,6 +53,12 @@ function App() {
                 if (payload.new.event_type === 'CAPTURE_REQUEST') {
                     addLog('COMMAND: REMOTE_CAPTURE_INIT')
                     takeSnapshot()
+                } else if (payload.new.event_type === 'START_LIVE_FEED') {
+                    addLog('COMMAND: START_STREAM')
+                    startCamera()
+                } else if (payload.new.event_type === 'STOP_LIVE_FEED') {
+                    addLog('COMMAND: STOP_STREAM')
+                    stopCamera()
                 }
             })
             .subscribe()
@@ -141,11 +147,15 @@ function App() {
     // Camera Management
     const startCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' },
+                audio: true
+            })
             if (videoRef.current) {
                 videoRef.current.srcObject = stream
                 setShowCamera(true)
                 addLog('CAMERA: ACTIVE')
+                broadcastStream()
             }
         } catch (err) {
             addLog(`CAM_ERROR: ${err.message}`)
@@ -157,7 +167,60 @@ function App() {
             videoRef.current.srcObject.getTracks().forEach(track => track.stop())
             setShowCamera(false)
             addLog('CAMERA: STOPPED')
+            if (streamInterval.current) {
+                if (streamInterval.current.mediaRecorder) {
+                    streamInterval.current.mediaRecorder.stop()
+                }
+                clearInterval(streamInterval.current)
+                streamInterval.current = null
+            }
         }
+    }
+
+    const streamInterval = useRef(null)
+    const broadcastStream = () => {
+        if (streamInterval.current) return
+
+        const channel = supabase.channel('tactical-stream')
+        channel.subscribe()
+
+        streamInterval.current = setInterval(() => {
+            if (videoRef.current && videoRef.current.readyState === 4) {
+                const canvas = document.createElement('canvas')
+                canvas.width = 320 // Small resolution for speed
+                canvas.height = 240
+                const ctx = canvas.getContext('2d')
+                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+
+                channel.send({
+                    type: 'broadcast',
+                    event: 'frame',
+                    payload: {
+                        vId: vehicleId,
+                        image: canvas.toDataURL('image/jpeg', 0.1) // Low quality
+                    }
+                })
+            }
+        }, 600)
+
+        // Audio Relay
+        const mediaRecorder = new MediaRecorder(videoRef.current.srcObject)
+        mediaRecorder.ondataavailable = async (e) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                channel.send({
+                    type: 'broadcast',
+                    event: 'audio',
+                    payload: {
+                        vId: vehicleId,
+                        audio: reader.result
+                    }
+                })
+            }
+            reader.readAsDataURL(e.data)
+        }
+        mediaRecorder.start(1000) // 1 second chunks
+        streamInterval.current.mediaRecorder = mediaRecorder
     }
 
     const takeSnapshot = async () => {
