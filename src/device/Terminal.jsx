@@ -10,9 +10,15 @@ function Terminal() {
     const [logs, setLogs] = useState([])
     const [vehicleId, setVehicleId] = useState(() => {
         const id = localStorage.getItem('vehicle_id')
-        // Simple UUID regex check to clear legacy/invalid IDs like '1055'
+        // Strict UUID check (8-4-4-4-12)
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-        return isUuid ? id : ''
+        if (id && !isUuid) {
+            console.warn('SYSTEM: DISCARDING_LEGACY_ID', id)
+            localStorage.removeItem('vehicle_id')
+            localStorage.removeItem('license_plate')
+            return ''
+        }
+        return id || ''
     })
     const [orgContext, setOrgContext] = useState(() => {
         try { return JSON.parse(localStorage.getItem('org_context')) || {} } catch { return {} }
@@ -102,7 +108,7 @@ function Terminal() {
                 }).eq('id', vehicleId)
 
             } catch (err) {
-                console.error('GPS_UPLOAD_FAILED', err)
+                console.error('GPS_UPLOAD_FAILED', err.message, err.details, err.hint)
             }
         }
 
@@ -256,9 +262,7 @@ function Terminal() {
     const handleSOS = async () => {
         if (!vehicleId) return
         setDeviceStatus('SOS_ACTIVE')
-        addLog('EVENT: SOS_SIGNAL_SENT')
-
-        await supabase.from('events').insert({
+        const { error } = await supabase.from('events').insert({
             vehicle_id: vehicleId,
             organization_id: orgContext.organization_id,
             branch_id: orgContext.branch_id,
@@ -266,7 +270,13 @@ function Terminal() {
             meta: { lat: location.lat, lng: location.lng, time: new Date().toISOString() }
         })
 
-        await supabase.from('vehicles').update({ status: 'sos', last_seen: new Date().toISOString() }).eq('id', vehicleId)
+        if (error) {
+            console.error('SOS_FAILED:', error.message, error.details)
+            addLog('ERROR: SOS_SIGNAL_FAILED')
+        } else {
+            addLog('EVENT: SOS_SIGNAL_SENT')
+            await supabase.from('vehicles').update({ status: 'sos', last_seen: new Date().toISOString() }).eq('id', vehicleId)
+        }
 
         setTimeout(() => setDeviceStatus('IDLE'), 10000)
     }

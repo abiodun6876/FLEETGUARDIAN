@@ -127,10 +127,15 @@ function Dashboard() {
 
     const broadcastCommand = async (vId, type) => {
         const vehicle = vehicles.find(v => v.id === vId)
+        if (!vehicle?.id) {
+            console.error('COMMAND_ABORTED: Invalid Vehicle Context', vId)
+            return
+        }
+
         await supabase.from('events').insert({
-            vehicle_id: vId,
-            organization_id: vehicle?.organization_id,
-            branch_id: vehicle?.branch_id,
+            vehicle_id: vehicle.id,
+            organization_id: vehicle.organization_id,
+            branch_id: vehicle.branch_id,
             event_type: type,
             meta: { requested_by: 'COMMANDER_ALPHA' }
         })
@@ -328,7 +333,9 @@ function Dashboard() {
                                 <div className="space-y-3">
                                     <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
                                         <span className="text-slate-600">ID</span>
-                                        <span className="text-slate-400 font-mono">{v.id.split('-')[0]}...</span>
+                                        <span className="text-slate-400 font-mono">
+                                            {typeof v.id === 'string' ? `${v.id.split('-')[0]}...` : v.id}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
                                         <span className="text-slate-600">Status</span>
