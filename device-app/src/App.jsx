@@ -66,9 +66,11 @@ function App() {
         return () => supabase.removeChannel(channel)
     }, [vehicleId])
 
+    const [isTracking, setIsTracking] = useState(false)
+
     // GPS Heartbeat
     useEffect(() => {
-        if (!vehicleId) return;
+        if (!vehicleId || !isTracking) return;
 
         const updateLocation = async (pos) => {
             const { latitude: lat, longitude: lng, speed, heading } = pos.coords
@@ -88,7 +90,7 @@ function App() {
                 // Also update vehicle status
                 await supabase.from('vehicles').update({
                     last_seen: new Date().toISOString(),
-                    status: currentSpeed > 5 ? 'moving' : 'stopped'
+                    status: currentSpeed > 5 ? 'moving' : 'active'
                 }).eq('id', vehicleId)
 
             } catch (err) {
@@ -103,7 +105,7 @@ function App() {
         )
 
         return () => navigator.geolocation.clearWatch(watchId)
-    }, [vehicleId])
+    }, [vehicleId, isTracking])
 
     const connectTerminal = async (plate) => {
         if (!plate) return
@@ -378,6 +380,7 @@ function App() {
                             animate={{ opacity: 1, y: 0 }}
                             className="flex-1 glass p-6 flex flex-col justify-center items-center text-center relative overflow-hidden group shadow-2xl shadow-black/50"
                         >
+                            {/* ... (existing visualization code) ... */}
                             <div className="absolute inset-0 pointer-events-none">
                                 <div className="absolute top-0 left-0 w-full h-[1px] bg-emerald-500/20 animate-[scan_4s_linear_infinite]" />
                                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(16,185,129,0.05),transparent_70%)]" />
@@ -402,10 +405,10 @@ function App() {
                                         <div className="w-52 h-52 rounded-full border-2 border-emerald-500/5 flex items-center justify-center relative">
                                             <div className="w-44 h-44 rounded-full border border-emerald-500/10 flex items-center justify-center bg-emerald-500/[0.02]">
                                                 <div className="w-36 h-36 rounded-full border-2 border-emerald-500/30 flex items-center justify-center shadow-[0_0_50px_-12px_rgba(16,185,129,0.2)]">
-                                                    <MapPin className="text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" size={56} />
+                                                    <MapPin className={`${isTracking ? "text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "text-slate-700"}`} size={56} />
                                                 </div>
                                             </div>
-                                            <div className="absolute inset-0 border-t-2 border-l-2 border-emerald-500/40 rounded-full animate-spin [animation-duration:8s]" />
+                                            {isTracking && <div className="absolute inset-0 border-t-2 border-l-2 border-emerald-500/40 rounded-full animate-spin [animation-duration:8s]" />}
                                         </div>
                                     </div>
 
@@ -424,7 +427,16 @@ function App() {
                                         </div>
                                     </div>
 
-                                    <div className="mt-10 grid grid-cols-2 gap-4 w-72 mx-auto">
+                                    <div className="mt-6 flex justify-center">
+                                        <button
+                                            onClick={() => setIsTracking(!isTracking)}
+                                            className={`px-6 py-3 rounded-xl border font-black text-[10px] uppercase tracking-widest transition-all ${isTracking ? 'bg-emerald-500 text-black border-transparent shadow-lg shadow-emerald-500/20' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}
+                                        >
+                                            {isTracking ? 'UPLINK ACTIVE' : 'START UPLINK'}
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-6 grid grid-cols-2 gap-4 w-72 mx-auto">
                                         <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5">
                                             <p className="text-[7px] text-slate-500 uppercase font-black tracking-widest mb-1 text-left px-1">Compass</p>
                                             <p className="text-sm text-slate-200 font-black">{location.heading.toFixed(0)}° {getHeadingName(location.heading)}</p>
