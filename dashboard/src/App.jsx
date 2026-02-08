@@ -26,6 +26,7 @@ function App() {
     const [selectedVehicle, setSelectedVehicle] = useState(null)
     const [telemetry, setTelemetry] = useState([])
     const [liveStream, setLiveStream] = useState(null)
+    const [streamingVehicleId, setStreamingVehicleId] = useState(null)
 
     // Fetch initial data
     useEffect(() => {
@@ -142,8 +143,12 @@ function App() {
             meta: { requested_by: 'COMMANDER_NAVY' }
         })
         if (active) {
+            setStreamingVehicleId(vId)
             setLiveStream(null)
             setActiveTab('live')
+        } else {
+            setStreamingVehicleId(null)
+            setLiveStream(null)
         }
     }
 
@@ -168,12 +173,17 @@ function App() {
 
     const handleAddVehicle = async () => {
         if (!newVehicle.plate_number) return
-        const { error } = await supabase.from('vehicles').insert({
+        const { data, error } = await supabase.from('vehicles').insert({
             plate_number: newVehicle.plate_number.toUpperCase(),
             driver_name: newVehicle.driver_name,
-            status: 'offline'
-        })
-        if (!error) {
+            status: 'offline',
+            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321' // Default org from logs
+        }).select()
+
+        if (error) {
+            console.error('Registration Error:', error)
+            alert(`Fleet Registration Failed: ${error.message}`)
+        } else {
             setShowAddVehicle(false)
             setNewVehicle({ plate_number: '', driver_name: '' })
         }
@@ -303,9 +313,20 @@ function App() {
                                                 <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                                                 <span className="text-[8px] font-black text-white uppercase tracking-widest bg-black/50 px-2 py-1 rounded">Live_Feed // {selectedVehicle.plate_number}</span>
                                             </div>
-                                            <button onClick={() => { requestStreaming(selectedVehicle.id, false); setSelectedVehicle(null); }} className="absolute bottom-6 right-6 p-3 bg-rose-600/20 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-500/20 transition-all group">
-                                                <X size={16} />
-                                            </button>
+                                            <div className="absolute bottom-6 right-6 flex gap-2">
+                                                <button
+                                                    onClick={() => requestStreaming(selectedVehicle.id, false)}
+                                                    className="px-4 py-2 bg-rose-600/20 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-500/20 transition-all text-[10px] font-black uppercase"
+                                                >
+                                                    Stop Uplink
+                                                </button>
+                                                <button
+                                                    onClick={() => setSelectedVehicle(null)}
+                                                    className="p-3 bg-white/5 text-slate-400 hover:text-white rounded-xl border border-white/10 transition-all"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -314,7 +335,9 @@ function App() {
                                         key={v.id}
                                         vehicle={v}
                                         active={selectedVehicle?.id === v.id}
-                                        onSelect={() => { setSelectedVehicle(v); requestStreaming(v.id, true); }}
+                                        isStreaming={streamingVehicleId === v.id}
+                                        onSelect={() => setSelectedVehicle(v)}
+                                        onStream={(active) => requestStreaming(v.id, active)}
                                         onCapture={() => requestCapture(v.id)}
                                         onLogs={() => fetchTelemetry(v.id)}
                                     />
@@ -458,7 +481,9 @@ function StatCard({ icon, label, value, trend, suffix = '', alert }) {
     )
 }
 
-function VehicleItem({ vehicle, onSelect, onCapture, onLogs, active }) {
+function VehicleItem({ vehicle, onSelect, onCapture, onLogs, onStream, active, isStreaming }) {
+    const battery = vehicle.meta?.battery || 100;
+
     return (
         <div onClick={onSelect} className={`p-6 rounded-[32px] border transition-all group cursor-pointer ${active ? 'bg-blue-600/10 border-blue-500/30 shadow-lg shadow-blue-500/5' : 'border-transparent hover:bg-blue-500/[0.04] hover:border-white/5'} ${vehicle.status === 'sos' ? 'bg-rose-500/5 border-rose-500/20' : ''}`}>
             <div className="flex items-center justify-between mb-4">
@@ -471,12 +496,24 @@ function VehicleItem({ vehicle, onSelect, onCapture, onLogs, active }) {
                 </div>
                 <div className="text-right">
                     <p className="text-lg font-black text-white">{vehicle.speed.toFixed(0)} <span className="text-[9px] text-slate-600">KM/H</span></p>
+                    <div className="flex items-center justify-end gap-1.5 mt-1">
+                        <div className={`w-1.5 h-3 border border-white/20 rounded-[1px] relative overflow-hidden`}>
+                            <div className={`absolute bottom-0 left-0 right-0 bg-blue-500`} style={{ height: `${battery}%` }} />
+                        </div>
+                        <p className="text-[10px] font-black text-slate-500">{battery}%</p>
+                    </div>
                 </div>
             </div>
-            <div className="flex gap-2">
-                <button onClick={(e) => { e.stopPropagation(); onCapture(); }} className="flex-1 py-2 bg-blue-600/20 text-blue-400 text-[8px] font-black uppercase rounded-xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all">Capture</button>
-                <button onClick={(e) => { e.stopPropagation(); onLogs(); }} className="flex-1 py-2 bg-white/5 text-slate-400 text-[8px] font-black uppercase rounded-xl border border-white/5 hover:text-white transition-all">Logs</button>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+                <button onClick={(e) => { e.stopPropagation(); onCapture(); }} className="py-2 bg-blue-600/20 text-blue-400 text-[8px] font-black uppercase rounded-xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all">Capture</button>
+                <button onClick={(e) => { e.stopPropagation(); onLogs(); }} className="py-2 bg-white/5 text-slate-400 text-[8px] font-black uppercase rounded-xl border border-white/5 hover:text-white transition-all">Logs</button>
             </div>
+            <button
+                onClick={(e) => { e.stopPropagation(); onStream(!isStreaming); }}
+                className={`w-full py-3 ${isStreaming ? 'bg-rose-600/20 text-rose-500 border-rose-500/20 hover:bg-rose-600' : 'bg-emerald-600/20 text-emerald-500 border-emerald-500/20 hover:bg-emerald-600'} text-white text-[9px] font-black uppercase rounded-xl border transition-all hover:text-white`}
+            >
+                {isStreaming ? 'Stop Life Stream' : 'Start Live Stream'}
+            </button>
         </div>
     )
 }

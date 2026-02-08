@@ -5,6 +5,7 @@ import * as Camera from 'expo-camera';
 import * as TaskManager from 'expo-task-manager';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import * as Battery from 'expo-battery';
 import { supabase } from './supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -26,7 +27,35 @@ export default function App() {
   useEffect(() => {
     checkCachedSession();
     requestPermissions();
+    setupBatteryMonitoring();
   }, []);
+
+  const setupBatteryMonitoring = async () => {
+    const level = await Battery.getBatteryLevelAsync();
+    setBattery(Math.floor(level * 100));
+
+    Battery.addBatteryLevelListener(({ batteryLevel }) => {
+      const per = Math.floor(batteryLevel * 100);
+      setBattery(per);
+      AsyncStorage.setItem('last_battery_level', per.toString());
+      if (per < 20 && isLinked) {
+        sendAutoAlert('LOW_BATTERY', { level: per });
+      }
+    });
+  };
+
+  const sendAutoAlert = async (type, meta) => {
+    const contextStr = await AsyncStorage.getItem('org_context');
+    const context = JSON.parse(contextStr || '{}');
+    await supabase.from('events').insert({
+      vehicle_id: vehicleId,
+      organization_id: context.organization_id,
+      branch_id: context.branch_id,
+      event_type: 'ALERT',
+      meta: { ...meta, alert_type: type, timestamp: new Date().toISOString() }
+    });
+    addLog(`ALERT_SENT: ${type}`);
+  };
 
   // Real-time Command Listener
   useEffect(() => {
@@ -372,6 +401,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     const context = JSON.parse(contextStr || '{}');
 
     if (vehicleId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId)) {
+      const batteryLevel = await AsyncStorage.getItem('last_battery_level') || '100';
+
       await supabase.from('locations').insert({
         vehicle_id: vehicleId,
         organization_id: context.organization_id,
@@ -379,12 +410,25 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         lat: location.coords.latitude,
         lng: location.coords.longitude,
         speed: (location.coords.speed || 0) * 3.6,
-        heading: location.coords.heading || 0
+        heading: location.coords.heading || 0,
+        meta: { battery: parseInt(batteryLevel) }
       });
+
+      const currentSpeed = (location.coords.speed || 0) * 3.6;
+      if (currentSpeed > 100) {
+        await supabase.from('events').insert({
+          vehicle_id: vehicleId,
+          organization_id: context.organization_id,
+          branch_id: context.branch_id,
+          event_type: 'ALERT',
+          meta: { alert_type: 'SPEED_VIOLATION', speed: currentSpeed, timestamp: new Date().toISOString() }
+        });
+      }
 
       await supabase.from('vehicles').update({
         last_seen: new Date().toISOString(),
-        status: (location.coords.speed || 0) > 2 ? 'moving' : 'active'
+        status: (location.coords.speed || 0) > 2 ? 'moving' : 'active',
+        meta: { battery: parseInt(batteryLevel) }
       }).eq('id', vehicleId);
     }
   }
