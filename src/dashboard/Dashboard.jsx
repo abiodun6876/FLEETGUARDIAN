@@ -126,8 +126,11 @@ function Dashboard() {
     }
 
     const requestCapture = async (vId) => {
+        const vehicle = vehicles.find(v => v.id === vId)
         await supabase.from('events').insert({
             vehicle_id: vId,
+            organization_id: vehicle?.organization_id,
+            branch_id: vehicle?.branch_id,
             event_type: 'CAPTURE_REQUEST',
             meta: { requested_by: 'COMMANDER_ALPHA' }
         })

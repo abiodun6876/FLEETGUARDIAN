@@ -8,7 +8,15 @@ function Terminal() {
     const [isOnline, setIsOnline] = useState(navigator.onLine)
     const [deviceStatus, setDeviceStatus] = useState('IDLE')
     const [logs, setLogs] = useState([])
-    const [vehicleId, setVehicleId] = useState(localStorage.getItem('vehicle_id') || '')
+    const [vehicleId, setVehicleId] = useState(() => {
+        const id = localStorage.getItem('vehicle_id')
+        // Simple UUID regex check to clear legacy/invalid IDs like '1055'
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        return isUuid ? id : ''
+    })
+    const [orgContext, setOrgContext] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('org_context')) || {} } catch { return {} }
+    })
     const [plateNumber, setPlateNumber] = useState(localStorage.getItem('license_plate') || '')
     const [showCamera, setShowCamera] = useState(false)
     const [batteryLevel, setBatteryLevel] = useState(100)
@@ -72,6 +80,8 @@ function Terminal() {
             try {
                 const { error } = await supabase.from('locations').insert({
                     vehicle_id: vehicleId,
+                    organization_id: orgContext.organization_id,
+                    branch_id: orgContext.branch_id,
                     lat,
                     lng,
                     speed: currentSpeed,
@@ -105,7 +115,7 @@ function Terminal() {
             setDeviceStatus('CONNECTING')
             let { data, error } = await supabase
                 .from('vehicles')
-                .select('id')
+                .select('id, organization_id, branch_id')
                 .eq('license_plate', plate.toUpperCase())
                 .single()
 
@@ -126,9 +136,12 @@ function Terminal() {
                 data = newVal
             }
 
+            const context = { organization_id: data.organization_id, branch_id: data.branch_id }
             setVehicleId(data.id)
+            setOrgContext(context)
             setPlateNumber(plate.toUpperCase())
             localStorage.setItem('vehicle_id', data.id)
+            localStorage.setItem('org_context', JSON.stringify(context))
             localStorage.setItem('license_plate', plate.toUpperCase())
             addLog(`SYNC: TERMINAL_LINKED_${plate.toUpperCase()}`)
             setDeviceStatus('IDLE')
@@ -220,6 +233,8 @@ function Terminal() {
                 // Insert into media table
                 await supabase.from('media').insert({
                     vehicle_id: vehicleId,
+                    organization_id: orgContext.organization_id,
+                    branch_id: orgContext.branch_id,
                     type: 'image',
                     url: publicUrl,
                     trigger_type: 'manual'
@@ -239,11 +254,13 @@ function Terminal() {
 
         await supabase.from('events').insert({
             vehicle_id: vehicleId,
+            organization_id: orgContext.organization_id,
+            branch_id: orgContext.branch_id,
             event_type: 'SOS',
             meta: { lat: location.lat, lng: location.lng, time: new Date().toISOString() }
         })
 
-        await supabase.from('vehicles').update({ status: 'sos' }).eq('id', vehicleId)
+        await supabase.from('vehicles').update({ status: 'sos', last_seen: new Date().toISOString() }).eq('id', vehicleId)
 
         setTimeout(() => setDeviceStatus('IDLE'), 10000)
     }
