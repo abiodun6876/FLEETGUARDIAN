@@ -61,6 +61,12 @@ function Terminal() {
                 if (payload.new.event_type === 'CAPTURE_REQUEST') {
                     addLog('COMMAND: REMOTE_CAPTURE_INIT')
                     takeSnapshot()
+                } else if (payload.new.event_type === 'START_LIVE_FEED') {
+                    addLog('COMMAND: REMOTE_SURVEILLANCE_ON')
+                    startCamera()
+                } else if (payload.new.event_type === 'STOP_LIVE_FEED') {
+                    addLog('COMMAND: REMOTE_SURVEILLANCE_OFF')
+                    stopCamera()
                 }
             })
             .subscribe()

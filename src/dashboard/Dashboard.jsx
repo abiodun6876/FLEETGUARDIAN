@@ -125,16 +125,17 @@ function Dashboard() {
         })
     }
 
-    const requestCapture = async (vId) => {
+    const broadcastCommand = async (vId, type) => {
         const vehicle = vehicles.find(v => v.id === vId)
         await supabase.from('events').insert({
             vehicle_id: vId,
             organization_id: vehicle?.organization_id,
             branch_id: vehicle?.branch_id,
-            event_type: 'CAPTURE_REQUEST',
+            event_type: type,
             meta: { requested_by: 'COMMANDER_ALPHA' }
         })
-        alert('Capture Command Broadcasted')
+        const label = type.replace(/_/g, ' ')
+        alert(`Remote Command Broadcasted: ${label}`)
     }
 
     const acknowledgeSOS = async (vId) => {
@@ -278,10 +279,16 @@ function Dashboard() {
                                                     </span>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2 mt-4">
-                                                    <button onClick={() => requestCapture(v.id)} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-blue-500/20">
+                                                    <button onClick={() => broadcastCommand(v.id, 'START_LIVE_FEED')} title="Start Surveillance" className="p-2 bg-emerald-600/20 text-emerald-400 rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-emerald-500/20">
+                                                        <Activity size={14} /> Start
+                                                    </button>
+                                                    <button onClick={() => broadcastCommand(v.id, 'STOP_LIVE_FEED')} title="Stop Surveillance" className="p-2 bg-rose-600/20 text-rose-400 rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-rose-500/20">
+                                                        <Activity size={14} /> Stop
+                                                    </button>
+                                                    <button onClick={() => broadcastCommand(v.id, 'CAPTURE_REQUEST')} title="Take Snapshot" className="p-2 bg-blue-600/20 text-blue-400 rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-blue-500/20">
                                                         <Camera size={14} /> Snap
                                                     </button>
-                                                    <button onClick={() => fetchTelemetry(v.id)} className="p-2 bg-white/5 text-white rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-white/5">
+                                                    <button onClick={() => fetchTelemetry(v.id)} title="View Audit Logs" className="p-2 bg-white/5 text-white rounded-lg flex items-center justify-center gap-2 text-[10px] font-black uppercase border border-white/5">
                                                         <History size={14} /> Logs
                                                     </button>
                                                 </div>
@@ -297,7 +304,7 @@ function Dashboard() {
                             </div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                                 {vehicles.map(v => (
-                                    <VehicleItem key={v.id} vehicle={v} onSelect={() => setSelectedVehicle(v)} onCapture={() => requestCapture(v.id)} onLogs={() => fetchTelemetry(v.id)} />
+                                    <VehicleItem key={v.id} vehicle={v} onSelect={() => setSelectedVehicle(v)} onCapture={() => broadcastCommand(v.id, 'CAPTURE_REQUEST')} onStart={() => broadcastCommand(v.id, 'START_LIVE_FEED')} onStop={() => broadcastCommand(v.id, 'STOP_LIVE_FEED')} onLogs={() => fetchTelemetry(v.id)} />
                                 ))}
                             </div>
                         </div>
@@ -455,7 +462,7 @@ function StatCard({ icon, label, value, trend, suffix = '', alert }) {
     )
 }
 
-function VehicleItem({ vehicle, onCapture, onLogs }) {
+function VehicleItem({ vehicle, onCapture, onStart, onStop, onLogs }) {
     return (
         <div className={`p-6 rounded-[32px] border border-transparent transition-all group ${vehicle.status === 'sos' ? 'bg-rose-500/5 hover:border-rose-500/20' : 'hover:bg-blue-500/[0.04] hover:border-white/5'}`}>
             <div className="flex items-center justify-between mb-4">
@@ -470,9 +477,11 @@ function VehicleItem({ vehicle, onCapture, onLogs }) {
                     <p className="text-lg font-black text-white">{vehicle.speed.toFixed(0)} <span className="text-[9px] text-slate-600">KM/H</span></p>
                 </div>
             </div>
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={onCapture} className="flex-1 py-2 bg-blue-600/20 text-blue-400 text-[8px] font-black uppercase rounded-xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all">Capture</button>
-                <button onClick={onLogs} className="flex-1 py-2 bg-white/5 text-slate-400 text-[8px] font-black uppercase rounded-xl border border-white/5 hover:text-white transition-all">Logs</button>
+            <div className="flex flex-wrap gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={onStart} className="flex-1 min-w-[60px] py-2 bg-emerald-600/20 text-emerald-400 text-[8px] font-black uppercase rounded-xl border border-emerald-500/20 hover:bg-emerald-600 hover:text-white transition-all">Start</button>
+                <button onClick={onStop} className="flex-1 min-w-[60px] py-2 bg-rose-600/20 text-rose-400 text-[8px] font-black uppercase rounded-xl border border-rose-500/20 hover:bg-rose-600 hover:text-white transition-all">Stop</button>
+                <button onClick={onCapture} className="flex-1 min-w-[60px] py-2 bg-blue-600/20 text-blue-400 text-[8px] font-black uppercase rounded-xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all">Snap</button>
+                <button onClick={onLogs} className="flex-1 min-w-[60px] py-2 bg-white/5 text-slate-400 text-[8px] font-black uppercase rounded-xl border border-white/5 hover:text-white transition-all">Logs</button>
             </div>
         </div>
     )
