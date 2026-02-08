@@ -17,17 +17,17 @@ function Home() {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center z-10 mb-16"
+                className="text-center z-10 mb-8 md:mb-16"
             >
-                <div className="flex justify-center mb-6">
-                    <div className="p-4 bg-white/5 rounded-3xl border border-white/10 shadow-2xl">
-                        <Shield className="text-blue-500" size={64} />
+                <div className="flex justify-center mb-4 md:mb-6">
+                    <div className="p-3 md:p-4 bg-white/5 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl">
+                        <Shield className="text-blue-500 w-12 h-12 md:w-16 md:h-16" />
                     </div>
                 </div>
-                <h1 className="text-6xl font-black tracking-tighter title-font mb-4">
+                <h1 className="text-4xl md:text-6xl font-black tracking-tighter title-font mb-2 md:mb-4">
                     FLEET<span className="text-blue-500">GUARDIAN</span>
                 </h1>
-                <p className="text-slate-500 uppercase tracking-[0.4em] text-xs font-black">Tactical Asset Management & Real-time Telemetry</p>
+                <p className="text-slate-500 uppercase tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-xs font-black px-4">Tactical Asset Management & Real-time Telemetry</p>
             </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl z-10">
@@ -67,17 +67,17 @@ function RoleCard({ icon, title, description, color, onClick }) {
             whileHover={{ scale: 1.02, y: -5 }}
             whileTap={{ scale: 0.98 }}
             onClick={onClick}
-            className={`glass p-10 rounded-[40px] border text-left flex flex-col gap-6 transition-all group ${colorMap[color]}`}
+            className={`glass p-6 md:p-10 rounded-3xl md:rounded-[40px] border text-left flex flex-col gap-4 md:gap-6 transition-all group ${colorMap[color]}`}
         >
-            <div className={`p-4 rounded-2xl bg-white/5 w-fit group-hover:scale-110 transition-transform`}>
-                {icon}
+            <div className={`p-3 md:p-4 rounded-xl md:rounded-2xl bg-white/5 w-fit group-hover:scale-110 transition-transform`}>
+                {React.cloneElement(icon, { size: window.innerWidth < 768 ? 24 : 32 })}
             </div>
             <div>
-                <h3 className="text-2xl font-black title-font mb-2">{title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{description}</p>
+                <h3 className="text-xl md:text-2xl font-black title-font mb-1 md:mb-2">{title}</h3>
+                <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{description}</p>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-white transition-colors">
-                Enter Terminal <div className="w-12 h-px bg-current opacity-20" />
+            <div className="mt-2 md:mt-4 flex items-center gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-white transition-colors">
+                Enter Terminal <div className="w-8 md:w-12 h-px bg-current opacity-20" />
             </div>
         </motion.button>
     )

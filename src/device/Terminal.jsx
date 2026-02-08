@@ -243,16 +243,16 @@ function Terminal() {
             {/* Header / HUD */}
             <header className="flex justify-between items-center glass p-4 rounded-3xl border-white/5 shadow-2xl shadow-emerald-950/20">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-500/10 rounded-xl">
-                        <Shield className="text-emerald-500" size={20} />
+                    <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-lg md:rounded-xl">
+                        <Shield className="text-emerald-500" size={window.innerWidth < 768 ? 16 : 20} />
                     </div>
                     <div>
-                        <h1 className="title-font font-black text-lg tracking-tighter uppercase leading-tight">
+                        <h1 className="title-font font-black text-sm md:text-lg tracking-tighter uppercase leading-tight">
                             Fleet<span className="text-emerald-500">Guardian</span>
                         </h1>
                         <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-widest">
+                            <span className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[8px] md:text-[10px] text-emerald-500/70 font-bold uppercase tracking-widest">
                                 {vehicleId ? plateNumber : 'Active System'}
                             </span>
                         </div>
@@ -261,18 +261,18 @@ function Terminal() {
 
                 <div className="flex items-center gap-5">
                     <div className="flex flex-col items-center">
-                        <Wifi className={isOnline ? "text-emerald-500" : "text-rose-500"} size={18} />
-                        <span className="text-[8px] text-slate-500 font-bold uppercase mt-1">Net</span>
+                        <Wifi className={isOnline ? "text-emerald-500" : "text-rose-500"} size={window.innerWidth < 768 ? 16 : 18} />
+                        <span className="text-[7px] md:text-[8px] text-slate-500 font-bold uppercase mt-1">Net</span>
                     </div>
-                    <div className="h-8 w-px bg-white/10" />
+                    <div className="h-6 md:h-8 w-px bg-white/10" />
                     <div className="flex flex-col items-center">
                         <div className="relative">
-                            <Battery className={batteryLevel > 20 ? "text-emerald-500" : "text-rose-500"} size={18} />
+                            <Battery className={batteryLevel > 20 ? "text-emerald-500" : "text-rose-500"} size={window.innerWidth < 768 ? 16 : 18} />
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-[6px] font-black text-black">{batteryLevel}</span>
+                                <span className="text-[5px] md:text-[6px] font-black text-black">{batteryLevel}</span>
                             </div>
                         </div>
-                        <span className="text-[8px] text-slate-500 font-bold uppercase mt-1">Pwr</span>
+                        <span className="text-[7px] md:text-[8px] text-slate-500 font-bold uppercase mt-1">Pwr</span>
                     </div>
                 </div>
             </header>
@@ -336,10 +336,10 @@ function Terminal() {
                             ) : (
                                 <div className="relative z-0">
                                     <div className="mb-8 relative transition-transform duration-700 hover:scale-105">
-                                        <div className="w-52 h-52 rounded-full border-2 border-emerald-500/5 flex items-center justify-center relative">
-                                            <div className="w-44 h-44 rounded-full border border-emerald-500/10 flex items-center justify-center bg-emerald-500/[0.02]">
-                                                <div className="w-36 h-36 rounded-full border-2 border-emerald-500/30 flex items-center justify-center shadow-[0_0_50px_-12px_rgba(16,185,129,0.2)]">
-                                                    <MapPin className="text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" size={56} />
+                                        <div className="w-40 h-40 md:w-52 md:h-52 rounded-full border-2 border-emerald-500/5 flex items-center justify-center relative">
+                                            <div className="w-32 h-32 md:w-44 md:h-44 rounded-full border border-emerald-500/10 flex items-center justify-center bg-emerald-500/[0.02]">
+                                                <div className="w-24 h-24 md:w-36 md:h-36 rounded-full border-2 border-emerald-500/30 flex items-center justify-center shadow-[0_0_50px_-12px_rgba(16,185,129,0.2)]">
+                                                    <MapPin className="text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" size={window.innerWidth < 768 ? 40 : 56} />
                                                 </div>
                                             </div>
                                             <div className="absolute inset-0 border-t-2 border-l-2 border-emerald-500/40 rounded-full animate-spin [animation-duration:8s]" />
@@ -347,28 +347,28 @@ function Terminal() {
                                     </div>
 
                                     <div className="space-y-1">
-                                        <h2 className="text-6xl font-black title-font text-white flex items-baseline justify-center gap-2">
+                                        <h2 className="text-4xl md:text-6xl font-black title-font text-white flex items-baseline justify-center gap-2">
                                             {location.speed.toFixed(0)}
-                                            <span className="text-xs font-black text-slate-500 tracking-[0.3em] uppercase">KM/H</span>
+                                            <span className="text-[10px] md:text-xs font-black text-slate-500 tracking-[0.3em] uppercase">KM/H</span>
                                         </h2>
-                                        <div className="flex items-center justify-center gap-3">
-                                            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                                {location.lat.toFixed(6)}°N
+                                        <div className="flex items-center justify-center gap-2 md:gap-3">
+                                            <span className="text-[8px] md:text-[10px] bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                                {location.lat.toFixed(4)}°N
                                             </span>
-                                            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                                {location.lng.toFixed(6)}°E
+                                            <span className="text-[8px] md:text-[10px] bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                                {location.lng.toFixed(4)}°E
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div className="mt-10 grid grid-cols-2 gap-4 w-72 mx-auto">
-                                        <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5">
-                                            <p className="text-[7px] text-slate-500 uppercase font-black tracking-widest mb-1 text-left px-1">Compass</p>
-                                            <p className="text-sm text-slate-200 font-black">{location.heading.toFixed(0)}° {getHeadingName(location.heading)}</p>
+                                    <div className="mt-6 md:mt-10 grid grid-cols-2 gap-3 md:gap-4 w-full max-w-[280px] md:max-w-72 mx-auto">
+                                        <div className="bg-white/[0.03] p-2 md:p-3 rounded-xl md:rounded-2xl border border-white/5">
+                                            <p className="text-[6px] md:text-[7px] text-slate-500 uppercase font-black tracking-widest mb-1 text-left px-1">Compass</p>
+                                            <p className="text-xs md:text-sm text-slate-200 font-black">{location.heading.toFixed(0)}° {getHeadingName(location.heading)}</p>
                                         </div>
-                                        <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5">
-                                            <p className="text-[7px] text-slate-500 uppercase font-black tracking-widest mb-1 text-left px-1">Status</p>
-                                            <p className="text-sm text-emerald-400 font-black uppercase text-center">{deviceStatus}</p>
+                                        <div className="bg-white/[0.03] p-2 md:p-3 rounded-xl md:rounded-2xl border border-white/5">
+                                            <p className="text-[6px] md:text-[7px] text-slate-500 uppercase font-black tracking-widest mb-1 text-left px-1">Status</p>
+                                            <p className="text-xs md:text-sm text-emerald-400 font-black uppercase text-center">{deviceStatus}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -400,13 +400,13 @@ function Terminal() {
                         <button
                             onClick={handleSOS}
                             disabled={deviceStatus === 'SOS_ACTIVE'}
-                            className={`p-6 rounded-3xl flex items-center justify-center gap-4 transition-all relative overflow-hidden group ${deviceStatus === 'SOS_ACTIVE' ? 'bg-rose-600 text-white' : 'bg-rose-950/20 border border-rose-500/30 text-rose-500 active:scale-[0.98]'}`}
+                            className={`p-4 md:p-6 rounded-2xl md:rounded-3xl flex items-center justify-center gap-3 md:gap-4 transition-all relative overflow-hidden group ${deviceStatus === 'SOS_ACTIVE' ? 'bg-rose-600 text-white' : 'bg-rose-950/20 border border-rose-500/30 text-rose-500 active:scale-[0.98]'}`}
                         >
                             {deviceStatus === 'SOS_ACTIVE' && (
                                 <div className="absolute inset-0 bg-rose-500 opacity-20 animate-pulse" />
                             )}
-                            <AlertTriangle className={`${deviceStatus === 'SOS_ACTIVE' ? "animate-bounce" : "group-hover:scale-110 transition-transform"}`} size={28} />
-                            <span className="text-xl font-black title-font tracking-[0.2em] uppercase">Emergency SOS</span>
+                            <AlertTriangle className={`${deviceStatus === 'SOS_ACTIVE' ? "animate-bounce" : "group-hover:scale-110 transition-transform"}`} size={window.innerWidth < 768 ? 24 : 28} />
+                            <span className="text-lg md:text-xl font-black title-font tracking-[0.1em] md:tracking-[0.2em] uppercase">Emergency SOS</span>
                         </button>
                     </div>
 

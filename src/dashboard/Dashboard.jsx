@@ -16,15 +16,9 @@ L.Icon.Default.mergeOptions({
 });
 
 function Dashboard() {
-    const [activeTab, setActiveTab] = useState('live')
-    const [vehicles, setVehicles] = useState([])
-    const [notifications, setNotifications] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [stats, setStats] = useState({ online: 0, moving: 0, alert: 0 })
-    const [showAddVehicle, setShowAddVehicle] = useState(false)
-    const [newVehicle, setNewVehicle] = useState({ plate_number: '', driver_name: '' })
     const [selectedVehicle, setSelectedVehicle] = useState(null)
     const [telemetry, setTelemetry] = useState([])
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
     // Fetch initial data
     useEffect(() => {
@@ -155,56 +149,87 @@ function Dashboard() {
     return (
         <div className="flex bg-[#020408] text-slate-200 min-h-screen selection:bg-blue-500/30 font-sans overflow-hidden">
             {/* Sidebar */}
-            <aside className="w-[280px] bg-[#05070a] border-r border-white/5 flex flex-col fixed h-full z-20 shadow-2xl overflow-hidden">
-                <div className="p-8 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg shadow-blue-500/5">
-                        <Shield className="text-blue-500" size={24} />
-                    </div>
-                    <div>
-                        <h1 className="title-font font-black text-xl tracking-tighter leading-none uppercase">Fleet<span className="text-blue-500">G</span></h1>
-                        <p className="text-[8px] font-black text-slate-600 uppercase tracking-[0.4em] mt-1 pr-1">Tactical_Overwatch</p>
-                    </div>
-                </div>
-
-                <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
-                    <NavItem icon={<MapIcon size={18} />} label="Live Tactical" active={activeTab === 'live'} onClick={() => setActiveTab('live')} />
-                    <NavItem icon={<Truck size={18} />} label="Fleet Assets" active={activeTab === 'vehicles'} onClick={() => setActiveTab('vehicles')} />
-                    <NavItem icon={<History size={18} />} label="Telemetry" active={activeTab === 'history'} onClick={() => setActiveTab('history')} />
-                    <NavItem icon={<AlertCircle size={18} />} label="Alert Matrix" active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} badge={notifications.length > 0 ? notifications.length.toString() : null} />
-                </nav>
-
-                <div className="p-6 border-t border-white/5 bg-black/40">
-                    <button
-                        onClick={() => setShowAddVehicle(true)}
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-600/20"
+            <AnimatePresence>
+                {(isSidebarOpen || window.innerWidth > 1024) && (
+                    <motion.aside
+                        initial={{ x: -280 }}
+                        animate={{ x: 0 }}
+                        exit={{ x: -280 }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        className={`w-[280px] bg-[#05070a] border-r border-white/5 flex flex-col fixed h-full z-[60] shadow-2xl overflow-hidden lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
                     >
-                        <Plus size={16} /> Add New Asset
-                    </button>
-                </div>
-            </aside>
+                        <div className="p-8 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg shadow-blue-500/5">
+                                    <Shield className="text-blue-500" size={24} />
+                                </div>
+                                <div>
+                                    <h1 className="title-font font-black text-xl tracking-tighter leading-none uppercase text-white">Fleet<span className="text-blue-500">G</span></h1>
+                                    <p className="text-[8px] font-black text-slate-600 uppercase tracking-[0.4em] mt-1 pr-1">Tactical_Overwatch</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-white/40 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
+                            <NavItem icon={<MapIcon size={18} />} label="Live Tactical" active={activeTab === 'live'} onClick={() => { setActiveTab('live'); setIsSidebarOpen(false); }} />
+                            <NavItem icon={<Truck size={18} />} label="Fleet Assets" active={activeTab === 'vehicles'} onClick={() => { setActiveTab('vehicles'); setIsSidebarOpen(false); }} />
+                            <NavItem icon={<History size={18} />} label="Telemetry" active={activeTab === 'history'} onClick={() => { setActiveTab('history'); setIsSidebarOpen(false); }} />
+                            <NavItem icon={<AlertCircle size={18} />} label="Alert Matrix" active={activeTab === 'incidents'} onClick={() => { setActiveTab('incidents'); setIsSidebarOpen(false); }} badge={notifications.length > 0 ? notifications.length.toString() : null} />
+                        </nav>
+
+                        <div className="p-6 border-t border-white/5 bg-black/40">
+                            <button
+                                onClick={() => { setShowAddVehicle(true); setIsSidebarOpen(false); }}
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-600/20"
+                            >
+                                <Plus size={16} /> Add New Asset
+                            </button>
+                        </div>
+                    </motion.aside>
+                )}
+            </AnimatePresence>
+
+            {/* Backdrop for mobile sidebar */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[50] lg:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
 
             {/* Main Operational Hub */}
-            <main className="flex-1 ml-[280px] p-10 overflow-y-auto custom-scrollbar h-screen relative">
-                <header className="flex justify-between items-end mb-12">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.5em]">System_Nominal // Node_Sigma</p>
+            <main className="flex-1 lg:ml-[280px] p-4 md:p-10 overflow-y-auto custom-scrollbar h-screen relative">
+                <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-12 gap-6">
+                    <div className="space-y-1 w-full flex justify-between items-end md:block">
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.5em]">System_Nominal // Node_Sigma</p>
+                            </div>
+                            <h2 className="title-font text-3xl md:text-5xl font-black tracking-tighter text-white uppercase">Operations</h2>
                         </div>
-                        <h2 className="title-font text-5xl font-black tracking-tighter text-white uppercase">Operations</h2>
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="lg:hidden p-4 glass rounded-2xl text-blue-500 border-blue-500/20"
+                        >
+                            <LayoutDashboard size={24} />
+                        </button>
                     </div>
-                    <div className="flex items-center gap-6">
-                        <div className="glass px-6 py-4 rounded-3xl flex items-center gap-4 border-white/5 bg-[#0a0d14]/50">
-                            <Search size={20} className="text-slate-600" />
-                            <input type="text" placeholder="UUID_QUERY..." className="bg-transparent border-none outline-none text-xs w-full font-bold uppercase tracking-widest text-blue-400" />
+                    <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto">
+                        <div className="glass px-4 md:px-6 py-3 md:py-4 rounded-2xl md:rounded-3xl flex items-center gap-4 border-white/5 bg-[#0a0d14]/50 flex-1 md:flex-none">
+                            <Search size={18} className="text-slate-600" />
+                            <input type="text" placeholder="QUERY..." className="bg-transparent border-none outline-none text-[10px] md:text-xs w-full font-bold uppercase tracking-widest text-blue-400" />
                         </div>
-                        <div className="w-14 h-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
-                            <User size={28} className="text-blue-500" />
+                        <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                            <User size={24} className="text-blue-500" />
                         </div>
                     </div>
                 </header>
 
-                <div className="grid grid-cols-4 gap-6 mb-10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
                     <StatCard icon={<Truck className="text-blue-500" />} label="Assets" value={stats.online} trend="Active Nodes" />
                     <StatCard icon={<Activity className="text-emerald-500" />} label="Engagement" value={stats.moving} trend="Units in motion" />
                     <StatCard icon={<AlertCircle className="text-rose-500" />} label="Threats" value={stats.alert} trend="Priority Alerts" alert={stats.alert > 0} />
@@ -212,8 +237,8 @@ function Dashboard() {
                 </div>
 
                 {activeTab === 'live' && (
-                    <div className="grid grid-cols-12 gap-8 h-[700px]">
-                        <div className="col-span-12 xl:col-span-8 glass rounded-[40px] relative overflow-hidden border-white/5 shadow-3xl">
+                    <div className="grid grid-cols-12 gap-4 md:gap-8 h-auto lg:h-[700px]">
+                        <div className="col-span-12 xl:col-span-8 glass rounded-3xl md:rounded-[40px] relative overflow-hidden border-white/5 shadow-3xl h-[400px] md:h-full">
                             <MapContainer center={[6.52, 3.37]} zoom={12} style={{ height: '100%', width: '100%' }} zoomControl={false}>
                                 <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
                                 {vehicles.map(v => (
@@ -240,9 +265,9 @@ function Dashboard() {
                                 ))}
                             </MapContainer>
                         </div>
-                        <div className="col-span-12 xl:col-span-4 glass rounded-[40px] border-white/5 shadow-3xl overflow-hidden flex flex-col">
-                            <div className="p-8 border-b border-white/5 bg-white/[0.02]">
-                                <h3 className="font-black title-font text-2xl tracking-tighter">TACTICAL_FEED</h3>
+                        <div className="col-span-12 xl:col-span-4 glass rounded-3xl md:rounded-[40px] border-white/5 shadow-3xl overflow-hidden flex flex-col h-[500px] lg:h-full">
+                            <div className="p-6 md:p-8 border-b border-white/5 bg-white/[0.02]">
+                                <h3 className="font-black title-font text-xl md:text-2xl tracking-tighter">TACTICAL_FEED</h3>
                             </div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                                 {vehicles.map(v => (
@@ -254,18 +279,18 @@ function Dashboard() {
                 )}
 
                 {activeTab === 'vehicles' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
                         {vehicles.map(v => (
-                            <div key={v.id} className="glass p-8 rounded-[40px] border-white/5 relative group">
+                            <div key={v.id} className="glass p-6 md:p-8 rounded-3xl md:rounded-[40px] border-white/5 relative group">
                                 <div className="flex justify-between items-start mb-6">
-                                    <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center">
-                                        <Truck className="text-blue-500" size={32} />
+                                    <div className="w-12 h-12 md:w-14 md:h-14 bg-white/5 rounded-2xl flex items-center justify-center">
+                                        <Truck className="text-blue-500" size={28} />
                                     </div>
                                     <button onClick={() => deleteVehicle(v.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors">
                                         <Trash2 size={20} />
                                     </button>
                                 </div>
-                                <h4 className="text-2xl font-black text-white px-1">{v.plate_number}</h4>
+                                <h4 className="text-xl md:text-2xl font-black text-white px-1">{v.plate_number}</h4>
                                 <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6 px-1">{v.driver_name || 'System Operator'}</p>
                                 <div className="space-y-3">
                                     <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
@@ -283,23 +308,23 @@ function Dashboard() {
                 )}
 
                 {activeTab === 'history' && (
-                    <div className="glass rounded-[40px] border-white/5 overflow-hidden">
-                        <table className="w-full text-left border-collapse">
+                    <div className="glass rounded-3xl md:rounded-[40px] border-white/5 overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[600px]">
                             <thead>
                                 <tr className="bg-white/5 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                    <th className="p-6">Timestamp</th>
-                                    <th className="p-6">Velocity</th>
-                                    <th className="p-6">Coordinates</th>
-                                    <th className="p-6">Event</th>
+                                    <th className="p-4 md:p-6">Timestamp</th>
+                                    <th className="p-4 md:p-6">Velocity</th>
+                                    <th className="p-4 md:p-6">Coordinates</th>
+                                    <th className="p-4 md:p-6">Event</th>
                                 </tr>
                             </thead>
                             <tbody className="text-[11px] font-bold text-slate-300">
                                 {telemetry.length > 0 ? telemetry.map((t, i) => (
                                     <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02]">
-                                        <td className="p-6 text-slate-500">{new Date(t.created_at).toLocaleString()}</td>
-                                        <td className="p-6"><span className="text-blue-500 font-black">{t.speed.toFixed(1)}</span> KM/H</td>
-                                        <td className="p-6 font-mono text-slate-400">{t.lat.toFixed(4)}, {t.lng.toFixed(4)}</td>
-                                        <td className="p-6"><span className="px-2 py-1 bg-white/5 rounded text-[8px] uppercase">Telemetry</span></td>
+                                        <td className="p-4 md:p-6 text-slate-500 shrink-0">{new Date(t.created_at).toLocaleString()}</td>
+                                        <td className="p-4 md:p-6"><span className="text-blue-500 font-black">{t.speed.toFixed(1)}</span> KM/H</td>
+                                        <td className="p-4 md:p-6 font-mono text-slate-400">{t.lat.toFixed(4)}, {t.lng.toFixed(4)}</td>
+                                        <td className="p-4 md:p-6"><span className="px-2 py-1 bg-white/5 rounded text-[8px] uppercase">Telemetry</span></td>
                                     </tr>
                                 )) : (
                                     <tr><td colSpan="4" className="p-12 text-center text-slate-600 uppercase font-black tracking-widest">Select a vehicle to view tactical logs</td></tr>
@@ -312,17 +337,17 @@ function Dashboard() {
                 {activeTab === 'incidents' && (
                     <div className="space-y-4">
                         {notifications.map(n => (
-                            <div key={n.id} className="glass p-8 rounded-[40px] border-rose-500/20 flex items-center justify-between bg-rose-500/[0.02]">
-                                <div className="flex items-center gap-8">
-                                    <div className="w-16 h-16 bg-rose-600 text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-rose-600/40 animate-pulse">
-                                        <AlertCircle size={32} />
+                            <div key={n.id} className="glass p-6 md:p-8 rounded-3xl md:rounded-[40px] border-rose-500/20 flex flex-col md:flex-row items-start md:items-center justify-between bg-rose-500/[0.02] gap-6">
+                                <div className="flex items-center gap-6 md:gap-8">
+                                    <div className="w-12 h-12 md:w-16 md:h-16 bg-rose-600 text-white rounded-xl md:rounded-2xl flex items-center justify-center shadow-2xl shadow-rose-600/40 animate-pulse shrink-0">
+                                        <AlertCircle size={28} />
                                     </div>
                                     <div>
-                                        <h4 className="text-xl font-black text-white">{n.msg}</h4>
+                                        <h4 className="text-lg md:text-xl font-black text-white">{n.msg}</h4>
                                         <p className="text-[10px] font-black text-rose-300 uppercase tracking-widest mt-1 pr-1">{new Date(n.time).toLocaleString()}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => acknowledgeSOS(n.msg.replace('SOS ALERT: ', ''))} className="px-8 py-4 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all">
+                                <button onClick={() => acknowledgeSOS(n.msg.replace('SOS ALERT: ', ''))} className="w-full md:w-auto px-8 py-4 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black rounded-xl md:rounded-2xl uppercase tracking-widest transition-all">
                                     Acknowledge Signal
                                 </button>
                             </div>

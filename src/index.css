@@ -17,12 +17,13 @@
     body {
         @apply bg-[#020408] text-slate-50 antialiased overflow-x-hidden;
         font-family: 'Inter', sans-serif;
+        overscroll-behavior-y: none;
     }
 }
 
 @layer components {
     .glass {
-        @apply bg-[#10141c]/70 backdrop-blur-2xl border border-white/10 rounded-2xl;
+        @apply bg-[#10141c]/70 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-[40px];
     }
 
     .title-font {
@@ -30,7 +31,8 @@
     }
 
     .leaflet-container {
-        @apply !bg-[#0a0d12] rounded-2xl border border-white/5;
+        @apply !bg-[#0a0d12] rounded-3xl md:rounded-[40px] border border-white/5;
+        touch-action: pan-x pan-y;
     }
 }
 
