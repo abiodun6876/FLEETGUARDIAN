@@ -99,12 +99,37 @@ export default function App() {
     const cachedId = await AsyncStorage.getItem('vehicle_id');
     const cachedPlate = await AsyncStorage.getItem('license_plate');
     if (cachedId && cachedPlate) {
+      if (!isUUID(cachedId)) {
+        await AsyncStorage.clear();
+        return;
+      }
       setVehicleId(cachedId);
       setPlateNumber(cachedPlate);
       setIsLinked(true);
       setStatus('IDLE');
       startLocationTracking();
     }
+  };
+
+  const resetLink = async () => {
+    Alert.alert('WARNING', 'Sever this tactical link?', [
+      { text: 'CANCEL', style: 'cancel' },
+      {
+        text: 'SEVER LINK', style: 'destructive', onPress: async () => {
+          await AsyncStorage.clear();
+          setVehicleId('');
+          setPlateNumber('');
+          setIsLinked(false);
+          setStatus('OFFLINE');
+          addLog('SYSTEM: LINK_SEVERED');
+        }
+      }
+    ]);
+  };
+
+  const isUUID = (str) => {
+    if (!str) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
   };
 
   const requestPermissions = async () => {
@@ -134,11 +159,17 @@ export default function App() {
         return;
       }
 
+      if (!isUUID(data.id)) {
+        Alert.alert('DATABASE_ERROR', 'Remote ID is not a valid UUID. Contact Support.');
+        setStatus('ERROR');
+        return;
+      }
+
       await AsyncStorage.setItem('vehicle_id', data.id);
       await AsyncStorage.setItem('license_plate', plateNumber.toUpperCase());
       await AsyncStorage.setItem('org_context', JSON.stringify({
-        organization_id: data.organization_id,
-        branch_id: data.branch_id
+        organization_id: isUUID(data.organization_id) ? data.organization_id : '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+        branch_id: isUUID(data.branch_id) ? data.branch_id : 'b5e731df-b8cb-4073-a865-df7602b51a9d'
       }));
 
       setVehicleId(data.id);
@@ -179,11 +210,27 @@ export default function App() {
         });
 
         const fileName = `${vehicleId}/${Date.now()}.jpg`;
-        const { error } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('media')
           .upload(fileName, photo, { contentType: 'image/jpeg' });
 
-        if (!error) addLog('EVENT: SNAPSHOT_UPLOADED');
+        if (!uploadError && isUUID(vehicleId)) {
+          const publicUrl = `https://vpliofrxoalpihmebhrk.supabase.co/storage/v1/object/public/media/${fileName}`;
+          const contextStr = await AsyncStorage.getItem('org_context');
+          const context = JSON.parse(contextStr || '{}');
+
+          await supabase.from('media').insert({
+            vehicle_id: vehicleId,
+            type: 'image',
+            url: publicUrl,
+            trigger_type: 'manual',
+            organization_id: isUUID(context.organization_id) ? context.organization_id : null,
+            branch_id: isUUID(context.branch_id) ? context.branch_id : null
+          });
+          addLog('EVENT: SNAPSHOT_RECORDED');
+        } else if (uploadError) {
+          addLog(`ERROR: UPLOAD_${uploadError.message}`);
+        }
       } catch (e) {
         addLog('ERROR: CAPTURE_FAILED');
       }
@@ -314,7 +361,7 @@ export default function App() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.brand}>FLEETGUARDIAN</Text>
-          <Text style={styles.model}>TACTICAL UNIT v2.1 // ID: {vehicleId ? vehicleId.split('-')[0] : 'UPLINK_OFF'}</Text>
+          <Text style={styles.model}>TACTICAL UNIT v2.2 // ID: {isUUID(vehicleId) ? vehicleId.split('-')[0] : 'UPLINK_OFF'}</Text>
         </View>
         <View style={styles.statusBadge}>
           <View style={[styles.dot, { backgroundColor: isLinked ? (isStreaming ? '#f59e0b' : '#10b981') : '#f43f5e' }]} />
@@ -356,6 +403,10 @@ export default function App() {
               <Text style={styles.statValue}>ENCRYPTED</Text>
             </View>
           </View>
+
+          <TouchableOpacity style={styles.resetButton} onPress={resetLink}>
+            <Text style={styles.resetButtonText}>RESET TARGETING DATA</Text>
+          </TouchableOpacity>
 
           {/* Log Monitor */}
           <Text style={styles.sectionTitle}>SYSTEM TELEMETRY</Text>
@@ -552,6 +603,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     marginBottom: 8,
+  },
+  resetButton: {
+    backgroundColor: '#1e293b',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#ef444440',
+    marginBottom: 32,
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    color: '#ef4444',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
   statValue: {
     color: '#ffffff',

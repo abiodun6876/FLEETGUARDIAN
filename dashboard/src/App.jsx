@@ -145,9 +145,9 @@ function App() {
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: active ? 'START_LIVE_FEED' : 'STOP_LIVE_FEED',
-            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321', // Critical for RLS/Sync
+            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321', // Primary Core Org
             branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d',
-            meta: { requested_by: 'COMMANDER_NAVY' }
+            meta: { requested_by: 'COMMANDER_NAVY', mode: 'TACTICAL_HIGH_BANDWIDTH' }
         })
         if (active) {
             setStreamingVehicleId(vId)
@@ -175,9 +175,18 @@ function App() {
         alert('Capture Command Broadcasted')
     }
 
-    const acknowledgeSOS = async (vId) => {
-        await supabase.from('vehicles').update({ status: 'online' }).eq('id', vId)
-        setNotifications(prev => prev.filter(n => !n.msg.includes(vId)))
+    const acknowledgeSOS = async (fullMsg) => {
+        // Correctly extract UUID from string like "SOS ALERT: 5c8becdf..."
+        const parts = fullMsg.split(': ');
+        const vId = parts.length > 1 ? parts[1].trim() : null;
+
+        if (vId && isUUID(vId)) {
+            await supabase.from('vehicles').update({ status: 'online' }).eq('id', vId)
+            setNotifications(prev => prev.filter(n => !n.msg.includes(vId)))
+        } else {
+            console.warn('SYSTEM_ERROR: Malformed SOS message, cannot acknowledge', fullMsg);
+            setNotifications(prev => prev.filter(n => n.msg !== fullMsg));
+        }
     }
 
     const handleAddVehicle = async () => {
@@ -205,6 +214,7 @@ function App() {
     }
 
     const fetchTelemetry = async (vId) => {
+        if (!isUUID(vId)) return;
         const { data } = await supabase.from('locations')
             .select('*')
             .eq('vehicle_id', vId)
@@ -229,7 +239,7 @@ function App() {
                 </div>
 
                 <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
-                    <NavItem icon={<MapIcon size={18} />} label="Live Tactical" active={activeTab === 'live'} onClick={() => setActiveTab('live')} />
+                    <NavItem icon={<MapIcon size={18} />} label="Live Tactical" active={activeTab === 'live'} onClick={() => setActiveTab('live')} badge={streamingVehicleId ? 'LIVE' : null} />
                     <NavItem icon={<Truck size={18} />} label="Fleet Assets" active={activeTab === 'vehicles'} onClick={() => setActiveTab('vehicles')} />
                     <NavItem icon={<History size={18} />} label="Telemetry" active={activeTab === 'history'} onClick={() => setActiveTab('history')} />
                     <NavItem icon={<AlertCircle size={18} />} label="Alert Matrix" active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} badge={notifications.length > 0 ? notifications.length.toString() : null} />
@@ -425,7 +435,7 @@ function App() {
                                         <p className="text-[10px] font-black text-rose-300 uppercase tracking-widest mt-1 pr-1">{new Date(n.time).toLocaleString()}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => acknowledgeSOS(n.msg.replace('SOS ALERT: ', ''))} className="px-8 py-4 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all">
+                                <button onClick={() => acknowledgeSOS(n.msg)} className="px-8 py-4 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all">
                                     Acknowledge Signal
                                 </button>
                             </div>
