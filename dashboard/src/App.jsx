@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { LayoutDashboard, Map as MapIcon, Shield, Truck, AlertCircle, History, Settings, Bell, Search, User, Target, Activity, Cpu, Database, Cloud, Plus, Camera, Trash2, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { supabase } from './supabase'
@@ -315,6 +315,9 @@ function App() {
                                         </Popup>
                                     </Marker>
                                 ))}
+                                    </Marker>
+                                ))}
+                                <MapController selectedVehicle={selectedVehicle ? vehicles.find(v => v.id === selectedVehicle.id) : null} />
                             </MapContainer>
                         </div>
                         <div className="col-span-12 xl:col-span-4 glass rounded-[40px] border-white/5 shadow-3xl overflow-hidden flex flex-col">
@@ -369,110 +372,117 @@ function App() {
                             </div>
                         </div>
                     </div>
-                )}
+    )
+}
 
-                {activeTab === 'vehicles' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {vehicles.map(v => (
-                            <div key={v.id} className="glass p-8 rounded-[40px] border-white/5 relative group">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center">
-                                        <Truck className="text-blue-500" size={32} />
-                                    </div>
-                                    <button onClick={() => deleteVehicle(v.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors">
-                                        <Trash2 size={20} />
-                                    </button>
-                                </div>
-                                <h4 className="text-2xl font-black text-white px-1">{v.plate_number}</h4>
-                                <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6 px-1">{v.driver_name || 'System Operator'}</p>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
-                                        <span className="text-slate-600">ID</span>
-                                        <span className="text-slate-400 font-mono">{v.id.split('-')[0]}...</span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
-                                        <span className="text-slate-600">Status</span>
-                                        <span className={v.status === 'sos' ? 'text-rose-500' : 'text-blue-500'}>{v.status}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+{
+    activeTab === 'vehicles' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {vehicles.map(v => (
+                <div key={v.id} className="glass p-8 rounded-[40px] border-white/5 relative group">
+                    <div className="flex justify-between items-start mb-6">
+                        <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center">
+                            <Truck className="text-blue-500" size={32} />
+                        </div>
+                        <button onClick={() => deleteVehicle(v.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors">
+                            <Trash2 size={20} />
+                        </button>
                     </div>
-                )}
-
-                {activeTab === 'history' && (
-                    <div className="glass rounded-[40px] border-white/5 overflow-hidden">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-white/5 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                    <th className="p-6">Timestamp</th>
-                                    <th className="p-6">Velocity</th>
-                                    <th className="p-6">Coordinates</th>
-                                    <th className="p-6">Event</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-[11px] font-bold text-slate-300">
-                                {telemetry.length > 0 ? telemetry.map((t, i) => (
-                                    <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02]">
-                                        <td className="p-6 text-slate-500">{new Date(t.created_at).toLocaleString()}</td>
-                                        <td className="p-6"><span className="text-blue-500 font-black">{t.speed.toFixed(1)}</span> KM/H</td>
-                                        <td className="p-6 font-mono text-slate-400">{t.lat.toFixed(4)}, {t.lng.toFixed(4)}</td>
-                                        <td className="p-6"><span className="px-2 py-1 bg-white/5 rounded text-[8px] uppercase">Telemetry</span></td>
-                                    </tr>
-                                )) : (
-                                    <tr><td colSpan="4" className="p-12 text-center text-slate-600 uppercase font-black tracking-widest">Select a vehicle to view tactical logs</td></tr>
-                                )}
-                            </tbody>
-                        </table>
+                    <h4 className="text-2xl font-black text-white px-1">{v.plate_number}</h4>
+                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6 px-1">{v.driver_name || 'System Operator'}</p>
+                    <div className="space-y-3">
+                        <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
+                            <span className="text-slate-600">ID</span>
+                            <span className="text-slate-400 font-mono">{v.id.split('-')[0]}...</span>
+                        </div>
+                        <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
+                            <span className="text-slate-600">Status</span>
+                            <span className={v.status === 'sos' ? 'text-rose-500' : 'text-blue-500'}>{v.status}</span>
+                        </div>
                     </div>
-                )}
-
-                {activeTab === 'incidents' && (
-                    <div className="space-y-4">
-                        {notifications.map(n => (
-                            <div key={n.id} className="glass p-8 rounded-[40px] border-rose-500/20 flex items-center justify-between bg-rose-500/[0.02]">
-                                <div className="flex items-center gap-8">
-                                    <div className="w-16 h-16 bg-rose-600 text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-rose-600/40 animate-pulse">
-                                        <AlertCircle size={32} />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-xl font-black text-white">{n.msg}</h4>
-                                        <p className="text-[10px] font-black text-rose-300 uppercase tracking-widest mt-1 pr-1">{new Date(n.time).toLocaleString()}</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => acknowledgeSOS(n.msg)} className="px-8 py-4 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all">
-                                    Acknowledge Signal
-                                </button>
-                            </div>
-                        ))}
-                        {notifications.length === 0 && <div className="text-center py-20 text-slate-600 uppercase font-black tracking-widest">No active threats detected</div>}
-                    </div>
-                )}
-            </main>
-
-            {/* Modals */}
-            <AnimatePresence>
-                {showAddVehicle && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl p-6">
-                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass w-full max-w-md p-10 rounded-[40px] border-white/10 relative">
-                            <button onClick={() => setShowAddVehicle(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
-                            <h3 className="text-3xl font-black title-font mb-8 uppercase px-2">Register Asset</h3>
-                            <div className="space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">Plate Identifier</label>
-                                    <input value={newVehicle.plate_number} onChange={e => setNewVehicle({ ...newVehicle, plate_number: e.target.value })} type="text" placeholder="FG-000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-blue-400 font-mono outline-none focus:border-blue-500/50" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">Operator Name</label>
-                                    <input value={newVehicle.driver_name} onChange={e => setNewVehicle({ ...newVehicle, driver_name: e.target.value })} type="text" placeholder="COMMANDER NAME" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-slate-200 outline-none focus:border-blue-500/50" />
-                                </div>
-                                <button onClick={handleAddVehicle} className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl shadow-blue-600/20 uppercase tracking-widest text-xs mt-4">Confirm Deployment</button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                </div>
+            ))}
         </div>
+    )
+}
+
+{
+    activeTab === 'history' && (
+        <div className="glass rounded-[40px] border-white/5 overflow-hidden">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="bg-white/5 border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        <th className="p-6">Timestamp</th>
+                        <th className="p-6">Velocity</th>
+                        <th className="p-6">Coordinates</th>
+                        <th className="p-6">Event</th>
+                    </tr>
+                </thead>
+                <tbody className="text-[11px] font-bold text-slate-300">
+                    {telemetry.length > 0 ? telemetry.map((t, i) => (
+                        <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02]">
+                            <td className="p-6 text-slate-500">{new Date(t.created_at).toLocaleString()}</td>
+                            <td className="p-6"><span className="text-blue-500 font-black">{t.speed.toFixed(1)}</span> KM/H</td>
+                            <td className="p-6 font-mono text-slate-400">{t.lat.toFixed(4)}, {t.lng.toFixed(4)}</td>
+                            <td className="p-6"><span className="px-2 py-1 bg-white/5 rounded text-[8px] uppercase">Telemetry</span></td>
+                        </tr>
+                    )) : (
+                        <tr><td colSpan="4" className="p-12 text-center text-slate-600 uppercase font-black tracking-widest">Select a vehicle to view tactical logs</td></tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    )
+}
+
+{
+    activeTab === 'incidents' && (
+        <div className="space-y-4">
+            {notifications.map(n => (
+                <div key={n.id} className="glass p-8 rounded-[40px] border-rose-500/20 flex items-center justify-between bg-rose-500/[0.02]">
+                    <div className="flex items-center gap-8">
+                        <div className="w-16 h-16 bg-rose-600 text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-rose-600/40 animate-pulse">
+                            <AlertCircle size={32} />
+                        </div>
+                        <div>
+                            <h4 className="text-xl font-black text-white">{n.msg}</h4>
+                            <p className="text-[10px] font-black text-rose-300 uppercase tracking-widest mt-1 pr-1">{new Date(n.time).toLocaleString()}</p>
+                        </div>
+                    </div>
+                    <button onClick={() => acknowledgeSOS(n.msg)} className="px-8 py-4 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all">
+                        Acknowledge Signal
+                    </button>
+                </div>
+            ))}
+            {notifications.length === 0 && <div className="text-center py-20 text-slate-600 uppercase font-black tracking-widest">No active threats detected</div>}
+        </div>
+    )
+}
+            </main >
+
+    {/* Modals */ }
+    < AnimatePresence >
+    { showAddVehicle && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl p-6">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass w-full max-w-md p-10 rounded-[40px] border-white/10 relative">
+                <button onClick={() => setShowAddVehicle(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
+                <h3 className="text-3xl font-black title-font mb-8 uppercase px-2">Register Asset</h3>
+                <div className="space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">Plate Identifier</label>
+                        <input value={newVehicle.plate_number} onChange={e => setNewVehicle({ ...newVehicle, plate_number: e.target.value })} type="text" placeholder="FG-000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-blue-400 font-mono outline-none focus:border-blue-500/50" />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">Operator Name</label>
+                        <input value={newVehicle.driver_name} onChange={e => setNewVehicle({ ...newVehicle, driver_name: e.target.value })} type="text" placeholder="COMMANDER NAME" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-slate-200 outline-none focus:border-blue-500/50" />
+                    </div>
+                    <button onClick={handleAddVehicle} className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl shadow-blue-600/20 uppercase tracking-widest text-xs mt-4">Confirm Deployment</button>
+                </div>
+            </motion.div>
+        </div>
+    )}
+            </AnimatePresence >
+        </div >
     )
 }
 
@@ -540,6 +550,16 @@ function VehicleItem({ vehicle, onSelect, onCapture, onLogs, onStream, active, i
             </button>
         </div>
     )
+}
+
+function MapController({ selectedVehicle }) {
+    const map = useMap()
+    useEffect(() => {
+        if (selectedVehicle) {
+            map.flyTo([selectedVehicle.lat, selectedVehicle.lng], 16, { animate: true })
+        }
+    }, [selectedVehicle?.lat, selectedVehicle?.lng]) // Only re-center when coordinates change
+    return null
 }
 
 export default App
