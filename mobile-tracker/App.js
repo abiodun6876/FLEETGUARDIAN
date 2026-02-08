@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, ScrollView, SafeAreaView, StatusBar, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, StatusBar, Alert } from 'react-native';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import * as Camera from 'expo-camera';
 import * as TaskManager from 'expo-task-manager';
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
 import * as Battery from 'expo-battery';
 import { supabase } from './supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,14 +13,8 @@ export default function App() {
   const [vehicleId, setVehicleId] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
   const [status, setStatus] = useState('OFFLINE');
-  const [logs, setLogs] = useState([]);
   const [battery, setBattery] = useState(100);
   const [isLinked, setIsLinked] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const cameraUnitRef = useRef(null);
-  const recordingRef = useRef(null);
-  const streamInterval = useRef(null);
-  const streamChannel = useRef(null);
 
   useEffect(() => {
     checkCachedSession();
@@ -54,45 +46,6 @@ export default function App() {
       event_type: 'ALERT',
       meta: { ...meta, alert_type: type, timestamp: new Date().toISOString() }
     });
-    addLog(`ALERT_SENT: ${type}`);
-  };
-
-  // Real-time Command Listener
-  useEffect(() => {
-    if (!vehicleId) return;
-
-    addLog('SYSTEM: COMMAND_LISTENER_ACTIVE');
-    const channel = supabase
-      .channel(`commands:${vehicleId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'events',
-        filter: `vehicle_id=eq.${vehicleId}`
-      }, payload => {
-        const type = payload.new.event_type;
-        if (type === 'CAPTURE_REQUEST') {
-          addLog('COMMAND: REMOTE_CAPTURE');
-          takeSnapshot();
-        } else if (type === 'START_LIVE_FEED') {
-          addLog('COMMAND: START_STREAM');
-          startTacticalStream();
-        } else if (type === 'STOP_LIVE_FEED') {
-          addLog('COMMAND: STOP_STREAM');
-          stopTacticalStream();
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-      stopTacticalStream();
-    };
-  }, [vehicleId]);
-
-  const addLog = (msg) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setLogs(prev => [`[${timestamp}] ${msg}`, ...prev].slice(0, 50));
   };
 
   const checkCachedSession = async () => {
@@ -116,13 +69,13 @@ export default function App() {
       setVehicleId(cachedId);
       setPlateNumber(cachedPlate);
       setIsLinked(true);
-      setStatus('IDLE');
+      setStatus('TERMINAL_LINKED');
       startLocationTracking();
     }
   };
 
   const resetLink = async () => {
-    Alert.alert('WARNING', 'Sever this tactical link?', [
+    Alert.alert('WARNING', 'Sever this terminal link?', [
       { text: 'CANCEL', style: 'cancel' },
       {
         text: 'SEVER LINK', style: 'destructive', onPress: async () => {
@@ -131,7 +84,6 @@ export default function App() {
           setPlateNumber('');
           setIsLinked(false);
           setStatus('OFFLINE');
-          addLog('SYSTEM: LINK_SEVERED');
         }
       }
     ]);
@@ -145,16 +97,13 @@ export default function App() {
   const requestPermissions = async () => {
     const { status: locStatus } = await Location.requestForegroundPermissionsAsync();
     const { status: bgLocStatus } = await Location.requestBackgroundPermissionsAsync();
-    const { status: camStatus } = await Camera.requestCameraPermissionsAsync();
-    const { status: micStatus } = await Camera.requestMicrophonePermissionsAsync();
 
-    if (locStatus !== 'granted') addLog('ERROR: LOCATION_PERMISSION_DENIED');
-    if (camStatus !== 'granted') addLog('ERROR: CAMERA_PERMISSION_DENIED');
+    if (locStatus !== 'granted') Alert.alert('Permission Denied', 'Location permission is required.');
   };
 
   const linkVehicle = async () => {
     if (!plateNumber) return Alert.alert('Error', 'Please enter a license plate.');
-    setStatus('CONNECTING');
+    setStatus('CONNECTING...');
 
     try {
       const { data, error } = await supabase
@@ -184,11 +133,10 @@ export default function App() {
 
       setVehicleId(data.id);
       setIsLinked(true);
-      setStatus('READY');
-      addLog(`LINKED: ${plateNumber.toUpperCase()}`);
+      setStatus('TERMINAL_LINKED');
       startLocationTracking();
     } catch (err) {
-      addLog(`LINK_FAILED: ${err.message}`);
+      setStatus('LINK_FAILED');
     }
   };
 
@@ -196,161 +144,28 @@ export default function App() {
     try {
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-        distanceInterval: 10,
+        timeInterval: 1000,
+        distanceInterval: 1,
         foregroundService: {
-          notificationTitle: 'FleetGuardian Tracker',
-          notificationBody: 'Live tracking active...',
+          notificationTitle: 'FleetGuardian Terminal',
+          notificationBody: 'Uplink active...',
           notificationColor: '#10b981',
         },
       });
-      addLog('SYSTEM: GPS_TRACKING_ON');
     } catch (e) {
-      addLog('ERROR: BG_LOCATION_FAILED');
+      console.log('Location error', e);
     }
-  };
-
-  const takeSnapshot = async () => {
-    if (cameraUnitRef.current) {
-      try {
-        const photo = await cameraUnitRef.current.takePictureAsync({
-          quality: 0.3,
-          base64: true,
-          scale: 0.5
-        });
-
-        const fileName = `${vehicleId}/${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(fileName, photo, { contentType: 'image/jpeg' });
-
-        if (!uploadError && isUUID(vehicleId)) {
-          const publicUrl = `https://vpliofrxoalpihmebhrk.supabase.co/storage/v1/object/public/media/${fileName}`;
-          const contextStr = await AsyncStorage.getItem('org_context');
-          const context = JSON.parse(contextStr || '{}');
-
-          await supabase.from('media').insert({
-            vehicle_id: vehicleId,
-            type: 'image',
-            url: publicUrl,
-            trigger_type: 'manual',
-            organization_id: isUUID(context.organization_id) ? context.organization_id : null,
-            branch_id: isUUID(context.branch_id) ? context.branch_id : null
-          });
-          addLog('EVENT: SNAPSHOT_RECORDED');
-        } else if (uploadError) {
-          addLog(`ERROR: UPLOAD_${uploadError.message}`);
-        }
-      } catch (e) {
-        addLog('ERROR: CAPTURE_FAILED');
-      }
-    }
-  };
-
-  const startTacticalStream = () => {
-    if (isStreaming) return;
-    setIsStreaming(true);
-    setStatus('STREAMING');
-
-    if (!streamChannel.current) {
-      streamChannel.current = supabase.channel('tactical-stream');
-      streamChannel.current.subscribe();
-    }
-
-    streamInterval.current = setInterval(async () => {
-      if (cameraUnitRef.current) {
-        try {
-          const photo = await cameraUnitRef.current.takePictureAsync({
-            quality: 0.1,
-            base64: true,
-            scale: 0.3
-          });
-
-          streamChannel.current.send({
-            type: 'broadcast',
-            event: 'frame',
-            payload: {
-              vId: vehicleId,
-              image: `data:image/jpeg;base64,${photo.base64}`
-            },
-          });
-        } catch (e) {
-          console.log('Stream frame failed', e);
-        }
-      }
-    }, 600);
-
-    // Audio Streaming
-    startAudioRecording();
-  };
-
-  const startAudioRecording = async () => {
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
-      recordingRef.current = recording;
-
-      addLog('SYSTEM: AUDIO_LINK_ON');
-
-      // Periodically snip and send
-      const audioSendInterval = setInterval(async () => {
-        if (!isStreaming) {
-          clearInterval(audioSendInterval);
-          return;
-        }
-        try {
-          await recordingRef.current.stopAndUnloadAsync();
-          const uri = recordingRef.current.getURI();
-          const base64Audio = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-
-          streamChannel.current.send({
-            type: 'broadcast',
-            event: 'audio',
-            payload: {
-              vId: vehicleId,
-              audio: `data:audio/m4a;base64,${base64Audio}`
-            }
-          });
-
-          // Restart recording
-          const { recording: nextRec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
-          recordingRef.current = nextRec;
-        } catch (err) {
-          console.log('Audio snip failed');
-        }
-      }, 3000); // 3 second audio chips
-    } catch (err) {
-      addLog('ERROR: AUDIO_FAILED');
-    }
-  };
-
-  const stopTacticalStream = () => {
-    if (streamInterval.current) {
-      clearInterval(streamInterval.current);
-      streamInterval.current = null;
-    }
-    if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync();
-      recordingRef.current = null;
-    }
-    setIsStreaming(false);
-    setStatus('READY');
-    addLog('SYSTEM: STREAM_STOPPED');
   };
 
   const handleSOS = async () => {
     if (!vehicleId) return;
     setStatus('SOS_SIGNALING');
-    addLog('EVENT: SOS_EMISSION');
 
     const loc = await Location.getCurrentPositionAsync({});
     const contextStr = await AsyncStorage.getItem('org_context');
     const context = JSON.parse(contextStr || '{}');
 
-    if (!isUUID(vehicleId)) {
-      addLog('ERROR: INVALID_UUID_FORMAT');
-      return;
-    }
+    if (!isUUID(vehicleId)) return;
 
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
@@ -360,94 +175,68 @@ export default function App() {
       meta: { lat: loc.coords.latitude, lng: loc.coords.longitude }
     });
 
-    setTimeout(() => setStatus(isStreaming ? 'STREAMING' : 'READY'), 3000);
+    setTimeout(() => setStatus('TERMINAL_LINKED'), 3000);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <StatusBar barStyle="light-content" />
 
-      {/* Header HUD */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.brand}>FLEETGUARDIAN</Text>
-          <Text style={styles.model}>ACTIVE UNIT // {plateNumber || 'UNASSIGNED'}</Text>
-        </View>
-        <View style={styles.statusBadge}>
-          <View style={[styles.dot, { backgroundColor: isLinked ? (isStreaming ? '#f59e0b' : '#10b981') : '#f43f5e' }]} />
-          <Text style={styles.statusText}>{status}</Text>
-        </View>
-      </View>
-
-      {!isLinked ? (
-        <View style={styles.linkCard}>
-          <Text style={styles.label}>INITIALIZE TARGET LINK</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="PLATE NUMBER"
-            placeholderTextColor="#475569"
-            value={plateNumber}
-            onChangeText={setPlateNumber}
-            autoCapitalize="characters"
-          />
-          <TouchableOpacity style={styles.button} onPress={linkVehicle}>
-            <Text style={styles.buttonText}>ESTABLISH LINK</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <ScrollView style={styles.main}>
-          {isStreaming && (
-            <View style={styles.streamBanner}>
-              <Text style={styles.streamBannerText}>LIVE TACTICAL STREAM ACTIVE</Text>
-            </View>
-          )}
-
-          {/* Quick Stats */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>BATTERY</Text>
-              <Text style={styles.statValue}>{battery}%</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>NETWORK</Text>
-              <Text style={styles.statValue}>ENCRYPTED</Text>
-            </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.brand}>TERMINAL V.1</Text>
+          <View style={styles.statusBadge}>
+            <View style={[styles.dot, { backgroundColor: isLinked ? '#10b981' : '#f43f5e' }]} />
+            <Text style={styles.statusText}>{status}</Text>
           </View>
+        </View>
 
-          <TouchableOpacity style={styles.resetButton} onPress={resetLink}>
-            <Text style={styles.resetButtonText}>RESET TARGETING DATA</Text>
-          </TouchableOpacity>
-
-          {/* Log Monitor */}
-          <Text style={styles.sectionTitle}>SYSTEM TELEMETRY</Text>
-          <View style={styles.logContainer}>
-            {logs.map((log, i) => (
-              <Text key={i} style={styles.logText}>{log}</Text>
-            ))}
+        {!isLinked ? (
+          <View style={styles.linkCard}>
+            <Text style={styles.label}>ENTER TARGET IDENTIFIER</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="PLATE NUMBER"
+              placeholderTextColor="#475569"
+              value={plateNumber}
+              onChangeText={setPlateNumber}
+              autoCapitalize="characters"
+            />
+            <TouchableOpacity style={styles.button} onPress={linkVehicle}>
+              <Text style={styles.buttonText}>INITIALIZE UPLINK</Text>
+            </TouchableOpacity>
           </View>
+        ) : (
+          <View style={styles.main}>
+            <View style={styles.terminalScreen}>
+              <Text style={styles.terminalText}>{'>'} SYSTEM_READY</Text>
+              <Text style={styles.terminalText}>{'>'} UPLINK_ESTABLISHED</Text>
+              <Text style={styles.terminalText}>{'>'} ID: {plateNumber}</Text>
+              <Text style={styles.terminalText}>{'>'} BATTERY: {battery}%</Text>
+              <Text style={styles.terminalText}>{'>'} GPS_TRACKING: ACTIVE</Text>
+              <Text style={styles.terminalText}>{'>'} ENCRYPTION: AES-256</Text>
+              <Text style={styles.terminalText}>{'>'} WAIT_FOR_INSTRUCTION...</Text>
+            </View>
 
-          {/* SOS Control */}
-          <TouchableOpacity
-            style={[styles.sosButton, status === 'SOS_SIGNALING' && { backgroundColor: '#be123c' }]}
-            onLongPress={handleSOS}
-          >
-            <Text style={styles.sosText}>HOLD FOR SOS</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.resetButton} onPress={resetLink}>
+              <Text style={styles.resetButtonText}>TERMINATE UPLINK</Text>
+            </TouchableOpacity>
 
-          {/* Hidden Camera Component for Snapshots/Streaming */}
-          <Camera.CameraView
-            ref={cameraUnitRef}
-            style={{ width: 1, height: 1, opacity: 0.1 }}
-            facing="back"
-          />
-        </ScrollView>
-      )}
+            <TouchableOpacity
+              style={[styles.sosButton, status === 'SOS_SIGNALING' && { backgroundColor: '#be123c' }]}
+              onLongPress={handleSOS}
+            >
+              <Text style={styles.sosText}>EMERGENCY ALERT</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      {/* Footer Branding */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>SECURE ENCRYPTION ACTIVE</Text>
-      </View>
-    </SafeAreaView>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>SECURE CONNECTION // HEX_NODE_1</Text>
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -495,7 +284,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#000000',
   },
   header: {
     padding: 24,
@@ -503,29 +292,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#333',
   },
   brand: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  model: {
-    color: '#3b82f6',
-    fontSize: 10,
+    color: '#00ff00',
+    fontSize: 24,
     fontWeight: 'bold',
-    marginTop: 4,
+    fontFamily: 'monospace',
+    letterSpacing: 2,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#333',
   },
   dot: {
     width: 8,
@@ -534,9 +318,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusText: {
-    color: '#94a3b8',
+    color: '#ccc',
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
   linkCard: {
     padding: 40,
@@ -544,144 +329,87 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   label: {
-    color: '#3b82f6',
-    fontSize: 10,
-    fontWeight: '900',
+    color: '#00ff00',
+    fontSize: 14,
     marginBottom: 20,
     textAlign: 'center',
-    letterSpacing: 3,
+    fontFamily: 'monospace',
   },
   input: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111',
     borderWidth: 1,
-    borderColor: '#1e293b',
-    borderRadius: 16,
+    borderColor: '#00ff00',
     padding: 20,
-    color: '#3b82f6',
+    color: '#00ff00',
     fontSize: 24,
-    fontWeight: '900',
     textAlign: 'center',
     marginBottom: 24,
+    fontFamily: 'monospace',
   },
   button: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#00ff00',
     padding: 20,
-    borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
   },
   buttonText: {
-    color: '#ffffff',
-    fontWeight: '900',
-    fontSize: 14,
-    letterSpacing: 1,
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'monospace',
   },
   main: {
     flex: 1,
     padding: 24,
   },
-  streamBanner: {
-    backgroundColor: '#f59e0b20',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#f59e0b40',
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  streamBannerText: {
-    color: '#f59e0b',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 32,
-  },
-  statBox: {
+  terminalScreen: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111',
     padding: 20,
-    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#333',
+    marginBottom: 20,
   },
-  statLabel: {
-    color: '#64748b',
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginBottom: 8,
+  terminalText: {
+    color: '#00ff00',
+    fontFamily: 'monospace',
+    fontSize: 14,
+    marginBottom: 10,
   },
   resetButton: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#333',
     padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#ef444440',
-    marginBottom: 32,
+    marginBottom: 20,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#555',
   },
   resetButtonText: {
-    color: '#ef4444',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  statValue: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  sectionTitle: {
-    color: '#334155',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 2,
-    marginBottom: 16,
-    marginLeft: 4,
-  },
-  logContainer: {
-    backgroundColor: '#000000',
-    padding: 16,
-    borderRadius: 24,
-    height: 200,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    marginBottom: 32,
-  },
-  logText: {
-    color: '#10b981',
+    color: '#ccc',
+    fontSize: 12,
+    fontWeight: 'bold',
     fontFamily: 'monospace',
-    fontSize: 10,
-    marginBottom: 8,
   },
   sosButton: {
     backgroundColor: '#f43f5e',
     padding: 30,
-    borderRadius: 30,
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
   },
   sosText: {
     color: '#ffffff',
-    fontWeight: '900',
+    fontWeight: 'bold',
     fontSize: 18,
+    fontFamily: 'monospace',
   },
   footer: {
     padding: 20,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: '#333',
   },
   footerText: {
-    color: '#334155',
-    fontSize: 8,
-    fontWeight: 'bold',
-    letterSpacing: 2,
+    color: '#555',
+    fontSize: 10,
+    fontFamily: 'monospace',
   },
 });
