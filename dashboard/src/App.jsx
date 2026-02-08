@@ -181,7 +181,11 @@ function App() {
         const vId = parts.length > 1 ? parts[1].trim() : null;
 
         if (vId && isUUID(vId)) {
-            await supabase.from('vehicles').update({ status: 'online' }).eq('id', vId)
+            await supabase.from('vehicles').update({
+                status: 'online',
+                organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+                branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d'
+            }).eq('id', vId)
             setNotifications(prev => prev.filter(n => !n.msg.includes(vId)))
         } else {
             console.warn('SYSTEM_ERROR: Malformed SOS message, cannot acknowledge', fullMsg);
@@ -195,7 +199,8 @@ function App() {
             plate_number: newVehicle.plate_number.toUpperCase(),
             driver_name: newVehicle.driver_name,
             status: 'offline',
-            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321' // Default org from logs
+            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+            branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d'
         }).select()
 
         if (error) {
