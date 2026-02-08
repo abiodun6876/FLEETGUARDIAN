@@ -22,9 +22,10 @@ function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [stats, setStats] = useState({ online: 0, moving: 0, alert: 0 })
     const [showAddVehicle, setShowAddVehicle] = useState(false)
-    const [newVehicle, setNewVehicle] = useState({ plate_number: '', driver_name: '' })
+    const [newVehicle, setNewVehicle] = useState({ license_plate: '', vehicle_name: '' })
     const [selectedVehicle, setSelectedVehicle] = useState(null)
     const [telemetry, setTelemetry] = useState([])
+    const [media, setMedia] = useState([])
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
     // Fetch initial data
@@ -57,7 +58,13 @@ function Dashboard() {
             setLoading(false)
         }
 
+        const fetchMedia = async () => {
+            const { data } = await supabase.from('media').select('*').order('created_at', { ascending: false }).limit(20)
+            if (data) setMedia(data)
+        }
+
         fetchInitialData()
+        fetchMedia()
 
         // Realtime Subscriptions
         const locSub = supabase
@@ -94,10 +101,18 @@ function Dashboard() {
             })
             .subscribe()
 
+        const mediaSub = supabase
+            .channel('media-all')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'media' }, payload => {
+                setMedia(prev => [payload.new, ...prev].slice(0, 20))
+            })
+            .subscribe()
+
         return () => {
             supabase.removeChannel(locSub)
             supabase.removeChannel(eventSub)
             supabase.removeChannel(vehicleSub)
+            supabase.removeChannel(mediaSub)
         }
     }, [])
 
@@ -120,20 +135,20 @@ function Dashboard() {
     }
 
     const acknowledgeSOS = async (vId) => {
-        await supabase.from('vehicles').update({ status: 'online' }).eq('id', vId)
+        await supabase.from('vehicles').update({ status: 'active' }).eq('id', vId)
         setNotifications(prev => prev.filter(n => !n.msg.includes(vId)))
     }
 
     const handleAddVehicle = async () => {
         if (!newVehicle.plate_number) return
         const { error } = await supabase.from('vehicles').insert({
-            plate_number: newVehicle.plate_number.toUpperCase(),
-            driver_name: newVehicle.driver_name,
-            status: 'offline'
+            license_plate: newVehicle.license_plate.toUpperCase(),
+            vehicle_name: newVehicle.vehicle_name,
+            status: 'active'
         })
         if (!error) {
             setShowAddVehicle(false)
-            setNewVehicle({ plate_number: '', driver_name: '' })
+            setNewVehicle({ license_plate: '', vehicle_name: '' })
         }
     }
 
@@ -185,6 +200,7 @@ function Dashboard() {
                             <NavItem icon={<Truck size={18} />} label="Fleet Assets" active={activeTab === 'vehicles'} onClick={() => { setActiveTab('vehicles'); setIsSidebarOpen(false); }} />
                             <NavItem icon={<History size={18} />} label="Telemetry" active={activeTab === 'history'} onClick={() => { setActiveTab('history'); setIsSidebarOpen(false); }} />
                             <NavItem icon={<AlertCircle size={18} />} label="Alert Matrix" active={activeTab === 'incidents'} onClick={() => { setActiveTab('incidents'); setIsSidebarOpen(false); }} badge={notifications.length > 0 ? notifications.length.toString() : null} />
+                            <NavItem icon={<Camera size={18} />} label="Media Console" active={activeTab === 'media'} onClick={() => { setActiveTab('media'); setIsSidebarOpen(false); }} />
                         </nav>
 
                         <div className="p-6 border-t border-white/5 bg-black/40">
@@ -253,7 +269,7 @@ function Dashboard() {
                                         <Popup className="tactical-popup">
                                             <div className="bg-[#0a0d12] text-white p-4 rounded-xl border border-white/10 min-w-[200px]">
                                                 <div className="flex justify-between items-start mb-4">
-                                                    <p className="font-black text-lg text-blue-400">{v.plate_number}</p>
+                                                    <p className="font-black text-lg text-blue-400">{v.license_plate}</p>
                                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${v.status === 'moving' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>
                                                         {v.status}
                                                     </span>
@@ -297,8 +313,8 @@ function Dashboard() {
                                         <Trash2 size={20} />
                                     </button>
                                 </div>
-                                <h4 className="text-xl md:text-2xl font-black text-white px-1">{v.plate_number}</h4>
-                                <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6 px-1">{v.driver_name || 'System Operator'}</p>
+                                <h4 className="text-xl md:text-2xl font-black text-white px-1">{v.license_plate}</h4>
+                                <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6 px-1">{v.vehicle_name || 'System Operator'}</p>
                                 <div className="space-y-3">
                                     <div className="flex justify-between text-[10px] font-black uppercase py-3 border-b border-white/5">
                                         <span className="text-slate-600">ID</span>
@@ -362,6 +378,23 @@ function Dashboard() {
                         {notifications.length === 0 && <div className="text-center py-20 text-slate-600 uppercase font-black tracking-widest">No active threats detected</div>}
                     </div>
                 )}
+                {activeTab === 'media' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {media.map(m => (
+                            <div key={m.id} className="glass overflow-hidden group rounded-3xl md:rounded-[40px] border-white/5">
+                                <div className="aspect-video relative overflow-hidden">
+                                    <img src={m.url} alt="Tactical Capture" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                                <div className="p-6">
+                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">{vehicles.find(v => v.id === m.vehicle_id)?.license_plate || 'Unknown Asset'}</p>
+                                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{new Date(m.created_at).toLocaleString()}</p>
+                                </div>
+                            </div>
+                        ))}
+                        {media.length === 0 && <div className="col-span-full py-20 text-center text-slate-600 uppercase font-black tracking-widest">No tactical captures available</div>}
+                    </div>
+                )}
             </main>
 
             {/* Modals */}
@@ -374,11 +407,11 @@ function Dashboard() {
                             <div className="space-y-6">
                                 <div className="space-y-2">
                                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">Plate Identifier</label>
-                                    <input value={newVehicle.plate_number} onChange={e => setNewVehicle({ ...newVehicle, plate_number: e.target.value })} type="text" placeholder="FG-000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-blue-400 font-mono outline-none focus:border-blue-500/50" />
+                                    <input value={newVehicle.license_plate} onChange={e => setNewVehicle({ ...newVehicle, license_plate: e.target.value })} type="text" placeholder="FG-000" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-blue-400 font-mono outline-none focus:border-blue-500/50" />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest px-4">Operator Name</label>
-                                    <input value={newVehicle.driver_name} onChange={e => setNewVehicle({ ...newVehicle, driver_name: e.target.value })} type="text" placeholder="COMMANDER NAME" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-slate-200 outline-none focus:border-blue-500/50" />
+                                    <input value={newVehicle.vehicle_name} onChange={e => setNewVehicle({ ...newVehicle, vehicle_name: e.target.value })} type="text" placeholder="COMMANDER NAME" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-slate-200 outline-none focus:border-blue-500/50" />
                                 </div>
                                 <button onClick={handleAddVehicle} className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl shadow-blue-600/20 uppercase tracking-widest text-xs mt-4">Confirm Deployment</button>
                             </div>
@@ -426,8 +459,8 @@ function VehicleItem({ vehicle, onCapture, onLogs }) {
                 <div className="flex items-center gap-4">
                     <div className={`w-3 h-3 rounded-full ${vehicle.status === 'moving' ? 'bg-emerald-500' : vehicle.status === 'sos' ? 'bg-rose-500 animate-pulse' : 'bg-slate-700'}`} />
                     <div>
-                        <p className="text-base font-black text-white tracking-tight">{vehicle.plate_number}</p>
-                        <p className="text-[8px] text-slate-600 font-extrabold uppercase tracking-widest">{vehicle.driver_name || 'Operator'}</p>
+                        <p className="text-base font-black text-white tracking-tight">{vehicle.license_plate}</p>
+                        <p className="text-[8px] text-slate-600 font-extrabold uppercase tracking-widest">{vehicle.vehicle_name || 'Operator'}</p>
                     </div>
                 </div>
                 <div className="text-right">

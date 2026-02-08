@@ -9,7 +9,7 @@ function Terminal() {
     const [deviceStatus, setDeviceStatus] = useState('IDLE')
     const [logs, setLogs] = useState([])
     const [vehicleId, setVehicleId] = useState(localStorage.getItem('vehicle_id') || '')
-    const [plateNumber, setPlateNumber] = useState(localStorage.getItem('plate_number') || '')
+    const [plateNumber, setPlateNumber] = useState(localStorage.getItem('license_plate') || '')
     const [showCamera, setShowCamera] = useState(false)
     const [batteryLevel, setBatteryLevel] = useState(100)
     const videoRef = useRef(null)
@@ -82,7 +82,7 @@ function Terminal() {
                 // Also update vehicle status
                 await supabase.from('vehicles').update({
                     last_seen: new Date().toISOString(),
-                    status: currentSpeed > 5 ? 'moving' : 'stopped'
+                    status: currentSpeed > 5 ? 'moving' : 'active'
                 }).eq('id', vehicleId)
 
             } catch (err) {
@@ -106,7 +106,7 @@ function Terminal() {
             let { data, error } = await supabase
                 .from('vehicles')
                 .select('id')
-                .eq('plate_number', plate.toUpperCase())
+                .eq('license_plate', plate.toUpperCase())
                 .single()
 
             if (error && error.code !== 'PGRST116') throw error
@@ -116,9 +116,9 @@ function Terminal() {
                 const { data: newVal, error: insError } = await supabase
                     .from('vehicles')
                     .insert({
-                        plate_number: plate.toUpperCase(),
-                        status: 'online',
-                        driver_name: 'DEVICE_USER'
+                        license_plate: plate.toUpperCase(),
+                        status: 'active',
+                        vehicle_name: 'TERMINAL_NODE'
                     })
                     .select()
                     .single()
@@ -129,7 +129,7 @@ function Terminal() {
             setVehicleId(data.id)
             setPlateNumber(plate.toUpperCase())
             localStorage.setItem('vehicle_id', data.id)
-            localStorage.setItem('plate_number', plate.toUpperCase())
+            localStorage.setItem('license_plate', plate.toUpperCase())
             addLog(`SYNC: TERMINAL_LINKED_${plate.toUpperCase()}`)
             setDeviceStatus('IDLE')
         } catch (err) {
@@ -141,7 +141,10 @@ function Terminal() {
     // Camera Management
     const startCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' },
+                audio: true
+            })
             if (videoRef.current) {
                 videoRef.current.srcObject = stream
                 setShowCamera(true)
@@ -164,7 +167,10 @@ function Terminal() {
         if (!videoRef.current) {
             // If camera isn't active, try to start it briefly
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' },
+                    audio: true
+                })
                 const video = document.createElement('video')
                 video.srcObject = stream
                 await video.play()
