@@ -145,8 +145,6 @@ function App() {
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: active ? 'START_LIVE_FEED' : 'STOP_LIVE_FEED',
-            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321', // Primary Core Org
-            branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d',
             meta: { requested_by: 'COMMANDER_NAVY', mode: 'TACTICAL_HIGH_BANDWIDTH' }
         })
         if (active) {
@@ -168,8 +166,6 @@ function App() {
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: 'CAPTURE_REQUEST',
-            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
-            branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d',
             meta: { requested_by: 'COMMANDER_ALPHA' }
         })
         alert('Capture Command Broadcasted')

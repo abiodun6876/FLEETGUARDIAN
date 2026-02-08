@@ -49,8 +49,6 @@ export default function App() {
     const context = JSON.parse(contextStr || '{}');
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
-      organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
-      branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
       event_type: 'ALERT',
       meta: { ...meta, alert_type: type, timestamp: new Date().toISOString() }
     });
@@ -103,6 +101,16 @@ export default function App() {
         await AsyncStorage.clear();
         return;
       }
+
+      const contextStr = await AsyncStorage.getItem('org_context');
+      if (contextStr) {
+        const context = JSON.parse(contextStr);
+        if (!isUUID(context.organization_id)) {
+          await AsyncStorage.clear();
+          return;
+        }
+      }
+
       setVehicleId(cachedId);
       setPlateNumber(cachedPlate);
       setIsLinked(true);
@@ -337,15 +345,13 @@ export default function App() {
     const contextStr = await AsyncStorage.getItem('org_context');
     const context = JSON.parse(contextStr || '{}');
 
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId)) {
+    if (!isUUID(vehicleId)) {
       addLog('ERROR: INVALID_UUID_FORMAT');
       return;
     }
 
     await supabase.from('events').insert({
       vehicle_id: vehicleId,
-      organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
-      branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
       event_type: 'SOS',
       meta: { lat: loc.coords.latitude, lng: loc.coords.longitude }
     });
@@ -464,8 +470,6 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       if (currentSpeed > 100) {
         await supabase.from('events').insert({
           vehicle_id: vehicleId,
-          organization_id: context.organization_id || '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
-          branch_id: context.branch_id || 'b5e731df-b8cb-4073-a865-df7602b51a9d',
           event_type: 'ALERT',
           meta: { alert_type: 'SPEED_VIOLATION', speed: currentSpeed, timestamp: new Date().toISOString() }
         });
@@ -670,5 +674,5 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: 'bold',
     letterSpacing: 2,
-  }
+  },
 });
