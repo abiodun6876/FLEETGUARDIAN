@@ -11,8 +11,8 @@ import { supabase } from './supabase'
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
 function App() {
@@ -145,6 +145,8 @@ function App() {
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: active ? 'START_LIVE_FEED' : 'STOP_LIVE_FEED',
+            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321', // Critical for RLS/Sync
+            branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d',
             meta: { requested_by: 'COMMANDER_NAVY', mode: 'TACTICAL_HIGH_BANDWIDTH' }
         })
         if (active) {
@@ -166,6 +168,8 @@ function App() {
         await supabase.from('events').insert({
             vehicle_id: vId,
             event_type: 'CAPTURE_REQUEST',
+            organization_id: '87cc6b87-b93a-40ef-8ad0-0340f5ff8321',
+            branch_id: 'b5e731df-b8cb-4073-a865-df7602b51a9d',
             meta: { requested_by: 'COMMANDER_ALPHA' }
         })
         alert('Capture Command Broadcasted')
