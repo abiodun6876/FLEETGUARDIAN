@@ -8,4 +8,4 @@ cd device-app
 npx expo start
 cd mobile-tracker
 npm install
-npx expo start
+npx expo start --tunnelgy
