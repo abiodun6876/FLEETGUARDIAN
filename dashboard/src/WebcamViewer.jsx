@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Camera, RefreshCw, ZoomIn, ZoomOut, Settings2, Mic, MicOff, Video, VideoOff, Sun, Focus, Layers, Play, Square, Circle } from 'lucide-react'
+import { X, Camera, RefreshCw, ZoomIn, ZoomOut, Settings2, Mic, MicOff, Video, VideoOff, Sun, Focus, Layers, Play, Square, Circle, Activity } from 'lucide-react'
 
 export default function WebcamViewer({ vehicle, onClose }) {
     const [isLoading, setIsLoading] = useState(true)
@@ -308,7 +308,7 @@ export default function WebcamViewer({ vehicle, onClose }) {
                                 onChange={handleQuality}
                                 className="w-full accent-amber-500 bg-white/5 h-1.5 rounded-full outline-none"
                             />
-                            <p className="text-[8px] text-slate-600 font-black uppercase tracking-tighter text-center">Caution: Higher quality requires > 5Mbps bandwidth</p>
+                            <p className="text-[8px] text-slate-600 font-black uppercase tracking-tighter text-center">Caution: Higher quality requires &gt; 5Mbps bandwidth</p>
                         </div>
                     </div>
 
