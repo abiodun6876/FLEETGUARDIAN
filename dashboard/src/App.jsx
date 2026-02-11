@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import { LayoutDashboard, Map as MapIcon, Shield, Truck, AlertCircle, Settings, Bell, Search, User, Target, Activity, Cpu, Database, Cloud, Plus, Trash2, X, Package, DollarSign } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Map as MapIcon, Truck, AlertCircle, Search, User, Target, Activity, Plus, X, Package, DollarSign } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { supabase } from './supabase'
@@ -198,7 +198,7 @@ function App() {
                     <StatCard icon={<Truck className="text-amber-500" />} label="Active Drivers" value={stats.online} trend="Nodes Ready" />
                     <StatCard icon={<Activity className="text-emerald-500" />} label="On-Ride" value={stats.moving} trend="Deliveries in progress" />
                     <StatCard icon={<Package className="text-blue-500" />} label="Today's Items" value={stats.dailyItems} trend="Logistics throughput" />
-                    <StatCard icon={<DollarSign className="text-emerald-400" />} label="Today's Revenue" value={`$${stats.revenue}`} trend="Fleet Value Today" />
+                    <StatCard icon={<DollarSign className="text-emerald-400" />} label="Today's Revenue" value={`₦${stats.revenue}`} trend="Fleet Value Today" />
                 </div>
 
                 {activeTab === 'live' && (
@@ -222,7 +222,7 @@ function App() {
                                                 <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
                                                     <div className="flex items-center gap-2"><Package size={12} className="text-amber-500" /><span className="text-xs font-bold">{v.activeRide.items}</span></div>
                                                     <div className="flex items-center gap-2"><Target size={12} className="text-amber-500" /><span className="text-xs text-slate-400">{v.activeRide.dropoff_location}</span></div>
-                                                    <div className="mt-2 text-amber-500 font-bold text-sm">$ {v.activeRide.price}</div>
+                                                    <div className="mt-2 text-amber-500 font-bold text-sm">₦ {v.activeRide.price}</div>
                                                 </div>
                                             )}
                                         </div>
@@ -244,7 +244,7 @@ function App() {
                                             <div className="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center">
                                                 <Package className="text-amber-500" size={32} />
                                             </div>
-                                            <div className="text-amber-500 font-black text-xl">$ {r.price}</div>
+                                            <div className="text-amber-500 font-black text-xl">₦ {r.price}</div>
                                         </div>
                                         <h4 className="text-2xl font-black text-white">{r.items}</h4>
                                         <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-6">Track ID: {r.id.split('-')[0]}</p>
@@ -288,7 +288,7 @@ function App() {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4"><p className="text-xs text-slate-400">{driver?.driver_name || 'Unknown'}</p></td>
-                                                    <td className="px-6 py-4"><p className="text-sm font-black text-emerald-400">${r.price}</p></td>
+                                                    <td className="px-6 py-4"><p className="text-sm font-black text-emerald-400">₦{r.price}</p></td>
                                                 </tr>
                                             );
                                         }) : (
@@ -318,7 +318,7 @@ function App() {
                                             <tr key={h.id} className="hover:bg-white/[0.02] transition-colors">
                                                 <td className="px-6 py-4"><p className="text-sm font-bold text-white">{h.items}</p></td>
                                                 <td className="px-6 py-4"><p className="text-xs text-slate-400">{h.dropoff_location}</p></td>
-                                                <td className="px-6 py-4"><p className="text-sm font-black text-amber-500">${h.price}</p></td>
+                                                <td className="px-6 py-4"><p className="text-sm font-black text-amber-500">₦{h.price}</p></td>
                                                 <td className="px-6 py-4"><p className="text-[10px] text-slate-500 uppercase">{new Date(h.completed_at).toLocaleDateString()}</p></td>
                                             </tr>
                                         ))}

@@ -405,7 +405,7 @@ export default function App() {
               </View>
 
               <TextInput style={styles.formInput} placeholder="Items (e.g. Bread, Furniture)" placeholderTextColor="#94a3b8" value={items} onChangeText={setItems} />
-              <TextInput style={styles.formInput} placeholder="Price ($)" keyboardType="numeric" placeholderTextColor="#94a3b8" value={price} onChangeText={setPrice} />
+              <TextInput style={styles.formInput} placeholder="Price (₦)" keyboardType="numeric" placeholderTextColor="#94a3b8" value={price} onChangeText={setPrice} />
 
               {estimatedTime && (
                 <View style={styles.estimateBanner}>
@@ -452,7 +452,7 @@ export default function App() {
                 <Text style={styles.rideDetailInfo}>{activeRide?.items}</Text>
                 <Text style={styles.rideDetailSub}>To: {activeRide?.dropoff_location}</Text>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                  <Text style={styles.rideDetailPrice}>$ {activeRide?.price}</Text>
+                  <Text style={styles.rideDetailPrice}>₦ {activeRide?.price}</Text>
                   {activeRide?.estimated_time && (
                     <Text style={styles.rideDetailEstimate}>{activeRide.estimated_time} MIN EST.</Text>
                   )}
