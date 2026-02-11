@@ -68,6 +68,12 @@ export default function App() {
   const [routeCoords, setRouteCoords] = useState([]);
   const mapRef = useRef(null);
 
+  // Error handling & loading states
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [syncStatus, setSyncStatus] = useState('synced'); // synced, syncing, offline
+
   useEffect(() => {
     checkCachedData();
     requestPermissions();
@@ -81,6 +87,7 @@ export default function App() {
 
   const calculateEstimate = async () => {
     try {
+      setSyncStatus('syncing');
       const res = await fetch(`http://router.project-osrm.org/route/v1/driving/${pickupCoords.longitude},${pickupCoords.latitude};${dropoffCoords.longitude},${dropoffCoords.latitude}?overview=full&geometries=geojson`);
       const json = await res.json();
       if (json.routes && json.routes[0]) {
@@ -93,9 +100,14 @@ export default function App() {
           longitude: c[0]
         }));
         setRouteCoords(coords);
+        setSyncStatus('synced');
       }
     } catch (err) {
       console.error('ESTIMATE_ERROR:', err);
+      setSyncStatus('offline');
+      setIsOnline(false);
+      setError('Unable to calculate route. Check your connection.');
+      setTimeout(() => setError(null), 3000);
     }
   };
 
@@ -299,6 +311,27 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
+
+        {/* Connection Status Indicator */}
+        {!isOnline && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineText}>⚠️ OFFLINE MODE - Changes will sync when connected</Text>
+          </View>
+        )}
+
+        {/* Error Banner */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
+        {/* Sync Status */}
+        {syncStatus === 'syncing' && (
+          <View style={styles.syncBanner}>
+            <Text style={styles.syncText}>⟳ Syncing...</Text>
+          </View>
+        )}
 
         {appState === 'LINKING' && (
           <View style={styles.content}>
@@ -514,4 +547,10 @@ const styles = StyleSheet.create({
   rideDetailPrice: { color: '#fbbf24', fontSize: 20, fontWeight: 'bold' },
   rideDetailEstimate: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },
   completeButton: { backgroundColor: '#fbbf24', padding: 18, borderRadius: 8, alignItems: 'center' },
+  offlineBanner: { backgroundColor: '#f59e0b', padding: 12, alignItems: 'center' },
+  offlineText: { color: '#0f172a', fontSize: 12, fontWeight: 'bold' },
+  errorBanner: { backgroundColor: '#ef4444', padding: 12, alignItems: 'center' },
+  errorText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
+  syncBanner: { backgroundColor: '#3b82f6', padding: 8, alignItems: 'center' },
+  syncText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
 });

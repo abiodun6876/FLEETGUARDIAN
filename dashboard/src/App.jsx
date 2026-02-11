@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Map as MapIcon, Truck, AlertCircle, Search, User, Target, Activity, Plus, X, Package, DollarSign } from 'lucide-react'
+import { Map as MapIcon, Truck, AlertCircle, Search, User, Target, Activity, Plus, X, Package, DollarSign, Camera, Video } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { supabase } from './supabase'
+import WebcamViewer from './WebcamViewer'
 
 // Fix for default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -26,6 +27,9 @@ function App() {
     const [showAddVehicle, setShowAddVehicle] = useState(false)
     const [newVehicle, setNewVehicle] = useState({ license_plate: '', driver_name: '' })
     const [selectedVehicle, setSelectedVehicle] = useState(null)
+    const [weeklyRevenue, setWeeklyRevenue] = useState([])
+    const [showWebcam, setShowWebcam] = useState(false)
+    const [webcamVehicle, setWebcamVehicle] = useState(null)
 
     // Fetch initial data
     const fetchInitialData = async () => {
@@ -157,6 +161,8 @@ function App() {
                 <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto custom-scrollbar">
                     <NavItem icon={<MapIcon size={18} />} label="Live Map" active={activeTab === 'live'} onClick={() => setActiveTab('live')} />
                     <NavItem icon={<Package size={18} />} label="Active Rides" active={activeTab === 'rides'} onClick={() => setActiveTab('rides')} badge={rides.length > 0 ? rides.length.toString() : null} />
+                    <NavItem icon={<Activity size={18} />} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
+                    <NavItem icon={<Video size={18} />} label="Media" active={activeTab === 'media'} onClick={() => setActiveTab('media')} />
                     <NavItem icon={<Truck size={18} />} label="Drivers" active={activeTab === 'drivers'} onClick={() => setActiveTab('drivers')} />
                     <NavItem icon={<AlertCircle size={18} />} label="Incidents" active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} />
                 </nav>
@@ -223,6 +229,15 @@ function App() {
                                                     <div className="flex items-center gap-2"><Package size={12} className="text-amber-500" /><span className="text-xs font-bold">{v.activeRide.items}</span></div>
                                                     <div className="flex items-center gap-2"><Target size={12} className="text-amber-500" /><span className="text-xs text-slate-400">{v.activeRide.dropoff_location}</span></div>
                                                     <div className="mt-2 text-amber-500 font-bold text-sm">₦ {v.activeRide.price}</div>
+                                                    {v.webcam_enabled && (
+                                                        <button
+                                                            onClick={() => { setWebcamVehicle(v); setShowWebcam(true); }}
+                                                            className="mt-2 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold transition-all"
+                                                        >
+                                                            <Video size={14} />
+                                                            View Camera
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -355,6 +370,61 @@ function App() {
                         ))}
                     </div>
                 )}
+
+                {activeTab === 'media' && (
+                    <div className="space-y-8">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-4xl font-black title-font uppercase">Media Console</h2>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {vehicles.map(v => (
+                                <div key={v.id} className="glass p-8 rounded-[40px] border-white/5 relative group">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div>
+                                            <h4 className="text-2xl font-black text-white">{v.license_plate}</h4>
+                                            <p className="text-[10px] text-slate-500 uppercase tracking-widest">{v.driver_name}</p>
+                                        </div>
+                                        <Camera className="text-slate-600" size={24} />
+                                    </div>
+
+                                    {v.webcam_enabled && v.webcam_url ? (
+                                        <div className="space-y-4">
+                                            <div className="bg-black rounded-2xl overflow-hidden aspect-video relative">
+                                                <img
+                                                    src={`${v.webcam_url}/shot.jpg?t=${Date.now()}`}
+                                                    alt="Webcam preview"
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => { e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23334155" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" fill="%2364748b" font-size="12"%3ENo Signal%3C/text%3E%3C/svg%3E'; }}
+                                                />
+                                                <div className="absolute top-2 right-2 px-2 py-1 bg-rose-500 rounded-full flex items-center gap-1">
+                                                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                                    <span className="text-white text-[8px] font-bold">LIVE</span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => { setWebcamVehicle(v); setShowWebcam(true); }}
+                                                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all"
+                                            >
+                                                <Video size={16} />
+                                                Open Full View
+                                            </button>
+                                            <p className="text-xs text-slate-500 text-center truncate">{v.webcam_url}</p>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8">
+                                            <Camera className="mx-auto mb-3 text-slate-700" size={32} />
+                                            <p className="text-sm text-slate-500 mb-4">No webcam configured</p>
+                                            <button className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all">
+                                                Configure
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </main>
 
             <AnimatePresence>
@@ -372,6 +442,14 @@ function App() {
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* Webcam Viewer Modal */}
+            {showWebcam && webcamVehicle && (
+                <WebcamViewer
+                    vehicle={webcamVehicle}
+                    onClose={() => { setShowWebcam(false); setWebcamVehicle(null); }}
+                />
+            )}
         </div >
     )
 }
