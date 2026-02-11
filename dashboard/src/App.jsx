@@ -30,6 +30,9 @@ function App() {
     const [weeklyRevenue, setWeeklyRevenue] = useState([])
     const [showWebcam, setShowWebcam] = useState(false)
     const [webcamVehicle, setWebcamVehicle] = useState(null)
+    const [showWebcamConfig, setShowWebcamConfig] = useState(false)
+    const [configVehicle, setConfigVehicle] = useState(null)
+    const [webcamUrl, setWebcamUrl] = useState('')
 
     // Fetch initial data
     const fetchInitialData = async () => {
@@ -117,7 +120,7 @@ function App() {
         })
     }
 
-    const handleAddVehicle = async () => {
+    const addVehicle = async () => {
         if (!newVehicle.license_plate) return
         const { error } = await supabase.from('vehicles').insert({
             license_plate: newVehicle.license_plate.toUpperCase(),
@@ -129,6 +132,31 @@ function App() {
             setNewVehicle({ license_plate: '', driver_name: '' })
             fetchInitialData()
         }
+    }
+
+    const updateWebcamSettings = async () => {
+        if (!configVehicle) return
+
+        const { error } = await supabase
+            .from('vehicles')
+            .update({
+                webcam_url: webcamUrl,
+                webcam_enabled: webcamUrl.length > 0
+            })
+            .eq('id', configVehicle.id)
+
+        if (!error) {
+            setShowWebcamConfig(false)
+            setConfigVehicle(null)
+            setWebcamUrl('')
+            fetchInitialData()
+        }
+    }
+
+    const openWebcamConfig = (vehicle) => {
+        setConfigVehicle(vehicle)
+        setWebcamUrl(vehicle.webcam_url || '')
+        setShowWebcamConfig(true)
     }
 
     const [searchQuery, setSearchQuery] = useState('')
@@ -415,7 +443,10 @@ function App() {
                                         <div className="text-center py-8">
                                             <Camera className="mx-auto mb-3 text-slate-700" size={32} />
                                             <p className="text-sm text-slate-500 mb-4">No webcam configured</p>
-                                            <button className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all">
+                                            <button
+                                                onClick={() => openWebcamConfig(v)}
+                                                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all"
+                                            >
                                                 Configure
                                             </button>
                                         </div>
@@ -436,7 +467,45 @@ function App() {
                             <div className="space-y-6">
                                 <input value={newVehicle.license_plate} onChange={e => setNewVehicle({ ...newVehicle, license_plate: e.target.value })} type="text" placeholder="PLATE NUMBER" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white font-mono outline-none" />
                                 <input value={newVehicle.driver_name} onChange={e => setNewVehicle({ ...newVehicle, driver_name: e.target.value })} type="text" placeholder="DRIVER NAME" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white outline-none" />
-                                <button onClick={handleAddVehicle} className="w-full py-5 bg-amber-600 text-white font-black rounded-2xl shadow-2xl shadow-amber-600/20 uppercase tracking-widest text-xs mt-4">Confirm Registration</button>
+                                <button onClick={addVehicle} className="w-full py-5 bg-amber-600 text-white font-black rounded-2xl shadow-2xl shadow-amber-600/20 uppercase tracking-widest text-xs mt-4">Confirm Registration</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+
+                {showWebcamConfig && configVehicle && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl p-6">
+                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass w-full max-w-md p-10 rounded-[40px] border-white/10 relative">
+                            <button onClick={() => setShowWebcamConfig(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
+                            <h3 className="text-3xl font-black title-font mb-2 uppercase px-2">Configure Webcam</h3>
+                            <p className="text-sm text-slate-400 mb-8 px-2">{configVehicle.license_plate} - {configVehicle.driver_name}</p>
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-2 block px-2">IP Webcam URL</label>
+                                    <input
+                                        value={webcamUrl}
+                                        onChange={e => setWebcamUrl(e.target.value)}
+                                        type="text"
+                                        placeholder="http://192.168.1.100:8080"
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white font-mono text-sm outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                    <p className="text-xs text-slate-600 mt-2 px-2">Enter the IP address and port from your IP Webcam app</p>
+                                </div>
+                                <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
+                                    <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2">Quick Setup</h4>
+                                    <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside">
+                                        <li>Install "IP Webcam" app on Android</li>
+                                        <li>Start server in the app</li>
+                                        <li>Copy the URL shown (e.g., http://192.168.1.100:8080)</li>
+                                        <li>Paste it above and save</li>
+                                    </ol>
+                                </div>
+                                <button
+                                    onClick={updateWebcamSettings}
+                                    className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-600/20 uppercase tracking-widest text-xs mt-4 transition-all"
+                                >
+                                    Save Configuration
+                                </button>
                             </div>
                         </motion.div>
                     </div>
