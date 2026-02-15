@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react'
-import { Map as MapIcon, Truck, AlertCircle, Search, User, Target, Activity, Plus, X, Package, DollarSign, Camera, Video } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Map as MapIcon, Truck, AlertCircle, Search, User, Target, Activity, Plus, X, Package, DollarSign, Camera, Video, RefreshCw, Download } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { supabase } from './supabase'
 import WebcamViewer from './WebcamViewer'
+import { useLocalStorage, useDebounce } from './useLocalStorage'
+import { useToast } from './Toast'
+import { StatCardSkeleton, MapSkeleton, ListSkeleton, TableSkeleton } from './LoadingSkeleton'
+import EmptyState, { NoDataState, NoResultsState } from './EmptyState'
+import { useKeyboardShortcuts, KeyboardShortcutsHelp } from './KeyboardShortcuts'
 
 // Fix for default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -16,7 +21,12 @@ L.Icon.Default.mergeOptions({
 });
 
 function App() {
-    const [activeTab, setActiveTab] = useState('live')
+    // Persistent state with localStorage
+    const [activeTab, setActiveTab] = useLocalStorage('activeTab', 'live')
+    const [searchQuery, setSearchQuery] = useLocalStorage('searchQuery', '')
+    const [draftVehicle, setDraftVehicle] = useLocalStorage('draftVehicle', null)
+
+    // Regular state
     const [vehicles, setVehicles] = useState([])
     const [rides, setRides] = useState([])
     const [history, setHistory] = useState([])
@@ -25,7 +35,7 @@ function App() {
     const [loading, setLoading] = useState(true)
     const [stats, setStats] = useState({ online: 0, moving: 0, alert: 0 })
     const [showAddVehicle, setShowAddVehicle] = useState(false)
-    const [newVehicle, setNewVehicle] = useState({ license_plate: '', driver_name: '' })
+    const [newVehicle, setNewVehicle] = useState(draftVehicle || { license_plate: '', driver_name: '' })
     const [selectedVehicle, setSelectedVehicle] = useState(null)
     const [weeklyRevenue, setWeeklyRevenue] = useState([])
     const [showWebcam, setShowWebcam] = useState(false)
@@ -33,6 +43,14 @@ function App() {
     const [showWebcamConfig, setShowWebcamConfig] = useState(false)
     const [configVehicle, setConfigVehicle] = useState(null)
     const [webcamUrl, setWebcamUrl] = useState('')
+    const [lastRefresh, setLastRefresh] = useState(Date.now())
+    const [isRefreshing, setIsRefreshing] = useState(false)
+    const [showShortcuts, setShowShortcuts] = useState(false)
+
+    // Hooks
+    const toast = useToast()
+    const debouncedSearch = useDebounce(searchQuery, 300)
+    const searchInputRef = useRef(null)
 
     // Fetch initial data
     const fetchInitialData = async () => {
@@ -121,7 +139,10 @@ function App() {
     }
 
     const addVehicle = async () => {
-        if (!newVehicle.license_plate) return
+        if (!newVehicle.license_plate) {
+            toast.warning('Please enter a license plate')
+            return
+        }
         const { error } = await supabase.from('vehicles').insert({
             license_plate: newVehicle.license_plate.toUpperCase(),
             driver_name: newVehicle.driver_name,
@@ -130,9 +151,20 @@ function App() {
         if (!error) {
             setShowAddVehicle(false)
             setNewVehicle({ license_plate: '', driver_name: '' })
+            setDraftVehicle(null) // Clear draft
+            toast.success(`Driver ${newVehicle.license_plate.toUpperCase()} registered successfully`)
             fetchInitialData()
+        } else {
+            toast.error('Failed to register driver. Please try again.')
         }
     }
+
+    // Save draft when vehicle form changes
+    useEffect(() => {
+        if (showAddVehicle && (newVehicle.license_plate || newVehicle.driver_name)) {
+            setDraftVehicle(newVehicle)
+        }
+    }, [newVehicle, showAddVehicle, setDraftVehicle])
 
     const updateWebcamSettings = async () => {
         if (!configVehicle) return
@@ -149,7 +181,10 @@ function App() {
             setShowWebcamConfig(false)
             setConfigVehicle(null)
             setWebcamUrl('')
+            toast.success('Webcam configured successfully')
             fetchInitialData()
+        } else {
+            toast.error('Failed to update webcam settings')
         }
     }
 
@@ -159,19 +194,44 @@ function App() {
         setShowWebcamConfig(true)
     }
 
-    const [searchQuery, setSearchQuery] = useState('')
+    // Keyboard shortcuts
+    useKeyboardShortcuts([
+        { key: 'k', ctrl: true, description: 'Focus search', callback: () => searchInputRef.current?.focus() },
+        { key: '?', description: 'Show keyboard shortcuts', callback: () => setShowShortcuts(true) },
+        {
+            key: 'Escape', description: 'Close modals', callback: () => {
+                setShowAddVehicle(false)
+                setShowWebcamConfig(false)
+                setShowShortcuts(false)
+            }
+        },
+        {
+            key: 'r', ctrl: true, description: 'Refresh data', callback: (e) => {
+                e.preventDefault()
+                handleRefresh()
+            }
+        }
+    ])
 
     const filteredVehicles = vehicles.filter(v =>
-        v.license_plate.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.driver_name?.toLowerCase().includes(searchQuery.toLowerCase())
+        v.license_plate.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        v.driver_name?.toLowerCase().includes(debouncedSearch.toLowerCase())
     )
 
     const filteredRides = rides.filter(r =>
-        r.items.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.dropoff_location.toLowerCase().includes(searchQuery.toLowerCase())
+        r.items.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        r.dropoff_location.toLowerCase().includes(debouncedSearch.toLowerCase())
     )
 
     const totalRevenue = [...rides, ...history].reduce((acc, r) => acc + (r.price || 0), 0)
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true)
+        await fetchInitialData()
+        setLastRefresh(Date.now())
+        toast.success('Data refreshed')
+        setTimeout(() => setIsRefreshing(false), 500)
+    }
 
     return (
         <div className="flex bg-[#020408] text-slate-200 min-h-screen selection:bg-blue-500/30 font-sans overflow-hidden">
@@ -210,18 +270,45 @@ function App() {
                             <p className="text-[9px] font-black text-amber-500 uppercase tracking-[0.5em]">Logistics_Active // Command_Center</p>
                         </div>
                         <h2 className="title-font text-5xl font-black tracking-tighter text-white uppercase">Fleet Overwatch</h2>
+                        <p className="text-[10px] text-slate-600 font-bold mt-2">
+                            Last updated: {new Date(lastRefresh).toLocaleTimeString()}
+                        </p>
                     </div>
                     <div className="flex items-center gap-6">
                         <div className="glass px-6 py-4 rounded-3xl flex items-center gap-4 border-white/5 bg-[#0a0d14]/50">
                             <Search size={20} className="text-slate-600" />
                             <input
+                                ref={searchInputRef}
                                 type="text"
                                 placeholder="SEARCH DATA..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="bg-transparent border-none outline-none text-xs w-full font-bold uppercase tracking-widest text-amber-400"
                             />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="text-slate-500 hover:text-white transition-colors"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
                         </div>
+                        <button
+                            onClick={handleRefresh}
+                            disabled={isRefreshing}
+                            className="w-14 h-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center hover:bg-blue-600/20 transition-all disabled:opacity-50"
+                            title="Refresh data (Ctrl+R)"
+                        >
+                            <RefreshCw size={20} className={`text-blue-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                        <button
+                            onClick={() => setShowShortcuts(true)}
+                            className="w-14 h-14 rounded-2xl bg-slate-600/10 border border-slate-500/20 flex items-center justify-center hover:bg-slate-600/20 transition-all"
+                            title="Keyboard shortcuts (?)"
+                        >
+                            <span className="text-slate-400 font-black text-lg">?</span>
+                        </button>
                         <div className="w-14 h-14 rounded-2xl bg-amber-600/10 border border-amber-500/20 flex items-center justify-center">
                             <User size={28} className="text-amber-500" />
                         </div>
@@ -229,51 +316,66 @@ function App() {
                 </header>
 
                 <div className="grid grid-cols-4 gap-6 mb-10">
-                    <StatCard icon={<Truck className="text-amber-500" />} label="Active Drivers" value={stats.online} trend="Nodes Ready" />
-                    <StatCard icon={<Activity className="text-emerald-500" />} label="On-Ride" value={stats.moving} trend="Deliveries in progress" />
-                    <StatCard icon={<Package className="text-blue-500" />} label="Today's Items" value={stats.dailyItems} trend="Logistics throughput" />
-                    <StatCard icon={<DollarSign className="text-emerald-400" />} label="Today's Revenue" value={`₦${stats.revenue}`} trend="Fleet Value Today" />
+                    {loading ? (
+                        <>
+                            <StatCardSkeleton />
+                            <StatCardSkeleton />
+                            <StatCardSkeleton />
+                            <StatCardSkeleton />
+                        </>
+                    ) : (
+                        <>
+                            <StatCard icon={<Truck className="text-amber-500" />} label="Active Drivers" value={stats.online} trend="Nodes Ready" />
+                            <StatCard icon={<Activity className="text-emerald-500" />} label="On-Ride" value={stats.moving} trend="Deliveries in progress" />
+                            <StatCard icon={<Package className="text-blue-500" />} label="Today's Items" value={stats.dailyItems} trend="Logistics throughput" />
+                            <StatCard icon={<DollarSign className="text-emerald-400" />} label="Today's Revenue" value={`₦${stats.revenue}`} trend="Fleet Value Today" />
+                        </>
+                    )}
                 </div>
 
                 {activeTab === 'live' && (
-                    <div className="h-[700px] glass rounded-[40px] relative overflow-hidden border-white/5 shadow-3xl">
-                        <MapContainer center={[6.52, 3.37]} zoom={12} style={{ height: '100%', width: '100%' }} zoomControl={false}>
-                            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-                            {filteredVehicles.map((v) => (
-                                <Marker key={v.id} position={[v.lat, v.lng]}>
-                                    <Popup className="tactical-popup">
-                                        <div className="bg-[#0a0d12] text-white p-4 rounded-xl border border-white/10 min-w-[240px]">
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div>
-                                                    <p className="font-black text-lg text-amber-400">{v.license_plate}</p>
-                                                    <p className="text-[10px] text-slate-500 uppercase">{v.driver_name}</p>
+                    loading ? (
+                        <MapSkeleton />
+                    ) : (
+                        <div className="h-[700px] glass rounded-[40px] relative overflow-hidden border-white/5 shadow-3xl">
+                            <MapContainer center={[6.52, 3.37]} zoom={12} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+                                <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                                {filteredVehicles.map((v) => (
+                                    <Marker key={v.id} position={[v.lat, v.lng]}>
+                                        <Popup className="tactical-popup">
+                                            <div className="bg-[#0a0d12] text-white p-4 rounded-xl border border-white/10 min-w-[240px]">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <p className="font-black text-lg text-amber-400">{v.license_plate}</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase">{v.driver_name}</p>
+                                                    </div>
+                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${v.activeRide ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                                                        {v.activeRide ? 'ON-RIDE' : 'IDLE'}
+                                                    </span>
                                                 </div>
-                                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${v.activeRide ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>
-                                                    {v.activeRide ? 'ON-RIDE' : 'IDLE'}
-                                                </span>
+                                                {v.activeRide && (
+                                                    <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                                                        <div className="flex items-center gap-2"><Package size={12} className="text-amber-500" /><span className="text-xs font-bold">{v.activeRide.items}</span></div>
+                                                        <div className="flex items-center gap-2"><Target size={12} className="text-amber-500" /><span className="text-xs text-slate-400">{v.activeRide.dropoff_location}</span></div>
+                                                        <div className="mt-2 text-amber-500 font-bold text-sm">₦ {v.activeRide.price}</div>
+                                                        {v.webcam_enabled && (
+                                                            <button
+                                                                onClick={() => { setWebcamVehicle(v); setShowWebcam(true); }}
+                                                                className="mt-2 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold transition-all"
+                                                            >
+                                                                <Video size={14} />
+                                                                View Camera
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
-                                            {v.activeRide && (
-                                                <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
-                                                    <div className="flex items-center gap-2"><Package size={12} className="text-amber-500" /><span className="text-xs font-bold">{v.activeRide.items}</span></div>
-                                                    <div className="flex items-center gap-2"><Target size={12} className="text-amber-500" /><span className="text-xs text-slate-400">{v.activeRide.dropoff_location}</span></div>
-                                                    <div className="mt-2 text-amber-500 font-bold text-sm">₦ {v.activeRide.price}</div>
-                                                    {v.webcam_enabled && (
-                                                        <button
-                                                            onClick={() => { setWebcamVehicle(v); setShowWebcam(true); }}
-                                                            className="mt-2 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold transition-all"
-                                                        >
-                                                            <Video size={14} />
-                                                            View Camera
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </Popup>
-                                </Marker>
-                            ))}
-                        </MapContainer>
-                    </div>
+                                        </Popup>
+                                    </Marker>
+                                ))}
+                            </MapContainer>
+                        </div>
+                    )
                 )}
 
                 {activeTab === 'rides' && (
@@ -303,7 +405,16 @@ function App() {
                                         </div>
                                     </div>
                                 ))}
-                                {filteredRides.length === 0 && <div className="col-span-full py-10 text-center text-slate-600 uppercase font-black text-xs tracking-widest">No active deliveries match query</div>}
+                                {filteredRides.length === 0 && rides.length > 0 && (
+                                    <div className="col-span-full">
+                                        <NoResultsState onClear={() => setSearchQuery('')} />
+                                    </div>
+                                )}
+                                {rides.length === 0 && (
+                                    <div className="col-span-full">
+                                        <NoDataState onAction={() => { }} actionLabel="No active rides" />
+                                    </div>
+                                )}
                             </div>
                         </section>
 
@@ -519,6 +630,18 @@ function App() {
                     onClose={() => { setShowWebcam(false); setWebcamVehicle(null); }}
                 />
             )}
+
+            {/* Keyboard Shortcuts Help Modal */}
+            <KeyboardShortcutsHelp
+                isOpen={showShortcuts}
+                onClose={() => setShowShortcuts(false)}
+                shortcuts={[
+                    { key: 'K', ctrl: true, description: 'Focus search bar' },
+                    { key: 'R', ctrl: true, description: 'Refresh data' },
+                    { key: '?', description: 'Show keyboard shortcuts' },
+                    { key: 'Escape', description: 'Close modals and dialogs' },
+                ]}
+            />
         </div >
     )
 }
