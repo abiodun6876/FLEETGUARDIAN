@@ -46,6 +46,9 @@ function App() {
     const [lastRefresh, setLastRefresh] = useState(Date.now())
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [showShortcuts, setShowShortcuts] = useState(false)
+    const [showRemoteControl, setShowRemoteControl] = useState(false)
+    const [controlVehicle, setControlVehicle] = useState(null)
+    const [dispatchData, setDispatchData] = useState({ pickup: '', dropoff: '', items: '', price: '' })
 
     // Hooks
     const toast = useToast()
@@ -192,6 +195,73 @@ function App() {
         setConfigVehicle(vehicle)
         setWebcamUrl(vehicle.webcam_url || '')
         setShowWebcamConfig(true)
+    }
+
+    const openRemoteControl = (vehicle) => {
+        setControlVehicle(vehicle)
+        setShowRemoteControl(true)
+    }
+
+    const geocodeAddress = async (query) => {
+        try {
+            const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1`)
+            const data = await res.json()
+            if (data.features && data.features.length > 0) {
+                const [lng, lat] = data.features[0].geometry.coordinates
+                return { lat, lng }
+            }
+        } catch (err) {
+            console.error(err)
+        }
+        return null
+    }
+
+    const sendCommand = async (type, payload = {}) => {
+        if (!controlVehicle) return
+
+        let commandPayload = payload
+
+        // Enrich payload for Dispatch commands
+        if (type === 'START_RIDE') {
+            if (!dispatchData.pickup || !dispatchData.dropoff || !dispatchData.price) {
+                toast.warning('Please fill dispatch details')
+                return
+            }
+
+            toast.success('Geocoding addresses...')
+            let pickupCoords = { lat: 6.5244, lng: 3.3792 } // Default Lagos
+            let dropoffCoords = { lat: 6.6018, lng: 3.3515 } // Default Ikeja
+
+            try {
+                const [p, d] = await Promise.all([
+                    geocodeAddress(dispatchData.pickup),
+                    geocodeAddress(dispatchData.dropoff)
+                ])
+                if (p) pickupCoords = p
+                if (d) dropoffCoords = d
+            } catch (e) {
+                console.error('Geocoding error', e)
+                toast.error('Geocoding failed, using defaults')
+            }
+
+            commandPayload = {
+                ...dispatchData,
+                pickup_lat: pickupCoords.lat, pickup_lng: pickupCoords.lng,
+                dropoff_lat: dropoffCoords.lat, dropoff_lng: dropoffCoords.lng
+            }
+        }
+
+        const { error } = await supabase.from('device_commands').insert({
+            vehicle_id: controlVehicle.id,
+            command_type: type,
+            payload: commandPayload
+        })
+
+        if (!error) {
+            toast.success(`Command ${type} sent!`)
+        } else {
+            toast.error('Failed to send command')
+        }
     }
 
     // Keyboard shortcuts
@@ -504,6 +574,12 @@ function App() {
                                         <span className="text-[10px] text-slate-500 font-black uppercase">Recent Activity</span>
                                         <span className="text-[10px] text-slate-300 font-black uppercase">{new Date(v.last_seen || Date.now()).toLocaleTimeString()}</span>
                                     </div>
+                                    <button
+                                        onClick={() => openRemoteControl(v)}
+                                        className="w-full mt-4 py-3 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl flex items-center justify-center gap-2 text-xs font-black transition-all border border-red-600/20 uppercase tracking-widest"
+                                    >
+                                        <Activity size={16} /> Remote Control
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -617,6 +693,80 @@ function App() {
                                 >
                                     Save Configuration
                                 </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Remote Control Modal */}
+            <AnimatePresence>
+                {showRemoteControl && controlVehicle && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl p-6">
+                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="glass w-full max-w-2xl p-10 rounded-[40px] border-white/10 relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+                            <button onClick={() => setShowRemoteControl(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
+                            <h3 className="text-3xl font-black title-font mb-2 uppercase px-2">Remote Command</h3>
+                            <p className="text-sm text-slate-400 mb-8 px-2">Target: <span className="text-amber-500">{controlVehicle.license_plate}</span></p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                    <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Tracking Control</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => sendCommand('STOP_TRACKING')} className="py-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-rose-500/20">Stop GPS</button>
+                                            <button onClick={() => sendCommand('START_TRACKING')} className="py-4 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">Start GPS</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Process Control</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => sendCommand('RELOAD')} className="py-4 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-500/20">Reload App</button>
+                                            <button onClick={() => sendCommand('KILL_APP')} className="py-4 bg-slate-500/10 hover:bg-slate-500/20 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-500/20">Kill App</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Screen Control</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => sendCommand('DIM_SCREEN')} className="py-4 bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-purple-500/20">Dim (Sleep)</button>
+                                            <button onClick={() => sendCommand('RESET_SCREEN')} className="py-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-amber-500/20">Wake Up</button>
+                                        </div>
+                                    </div>
+
+                                    <button onClick={() => sendCommand('GET_STATUS')} className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/10">Get Device Status</button>
+                                </div>
+
+                                <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                                    <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest mb-6">Remote Dispatch</h4>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Pickup</label>
+                                            <input value={dispatchData.pickup} onChange={e => setDispatchData({ ...dispatchData, pickup: e.target.value })} type="text" className="w-full bg-[#0a0d12] border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-bold outline-none focus:border-amber-500/50" placeholder="Address..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Dropoff</label>
+                                            <input value={dispatchData.dropoff} onChange={e => setDispatchData({ ...dispatchData, dropoff: e.target.value })} type="text" className="w-full bg-[#0a0d12] border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-bold outline-none focus:border-amber-500/50" placeholder="Address..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Items</label>
+                                            <input value={dispatchData.items} onChange={e => setDispatchData({ ...dispatchData, items: e.target.value })} type="text" className="w-full bg-[#0a0d12] border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-bold outline-none focus:border-amber-500/50" placeholder="Content..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Price (₦)</label>
+                                            <input value={dispatchData.price} onChange={e => setDispatchData({ ...dispatchData, price: e.target.value })} type="number" className="w-full bg-[#0a0d12] border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-bold outline-none focus:border-amber-500/50" placeholder="0.00" />
+                                        </div>
+
+                                        <div className="pt-4 space-y-3">
+                                            <button onClick={() => sendCommand('START_RIDE')} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20">
+                                                <Package size={16} /> Dispatch Ride
+                                            </button>
+                                            <button onClick={() => sendCommand('COMPLETE_RIDE')} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20">
+                                                <Truck size={16} /> Force Complete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </motion.div>
                     </div>

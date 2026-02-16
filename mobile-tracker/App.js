@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, StatusBar, Alert, ScrollView, Dimensions, Linking } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, StatusBar, Alert, ScrollView, Dimensions, Linking, BackHandler } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as Brightness from 'expo-brightness';
+import * as Updates from 'expo-updates';
+import * as Battery from 'expo-battery';
 import { supabase } from './supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -55,6 +58,7 @@ export default function App() {
   const [dropoff, setDropoff] = useState('');
   const [items, setItems] = useState('');
   const [price, setPrice] = useState('');
+  const [isPriceVisible, setIsPriceVisible] = useState(false);
   const [activeRide, setActiveRide] = useState(null);
 
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -77,13 +81,119 @@ export default function App() {
   useEffect(() => {
     checkCachedData();
     requestPermissions();
-  }, []);
+
+    // Listen for remote commands
+    const commandSub = supabase
+      .channel('device-commands')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'device_commands', filter: `vehicle_id=eq.${vehicleId}` },
+        handleRemoteCommand
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(commandSub);
+    };
+  }, [vehicleId]);
+
+  const handleRemoteCommand = async (payload) => {
+    const command = payload.new;
+    console.log('RECEIVED COMMAND:', command);
+
+    try {
+      switch (command.command_type) {
+        case 'STOP_TRACKING':
+          await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+          stopForegroundWatching();
+          break;
+        case 'START_TRACKING':
+          await startLocationTracking();
+          startForegroundWatching();
+          break;
+        case 'KILL_APP':
+          BackHandler.exitApp();
+          break;
+        case 'RELOAD':
+          await Updates.reloadAsync();
+          break;
+        case 'DIM_SCREEN':
+          const { status } = await Brightness.requestPermissionsAsync();
+          if (status === 'granted') {
+            await Brightness.setBrightnessAsync(0);
+          }
+          break;
+        case 'RESET_SCREEN':
+          await Brightness.useSystemBrightnessAsync();
+          break;
+        case 'GET_STATUS':
+          const batteryLevel = await Battery.getBatteryLevelAsync();
+          await supabase.from('device_commands').update({
+            status: 'executed',
+            payload: { battery: batteryLevel, timestamp: new Date().toISOString() }
+          }).eq('id', command.id);
+          return; // Early return to avoid double update
+        case 'START_RIDE':
+          if (command.payload) {
+            const { pickup, dropoff, items, price, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng } = command.payload;
+            setPickup(pickup);
+            setDropoff(dropoff);
+            setItems(items);
+            setPrice(price.toString());
+            setPickupCoords({ latitude: pickup_lat, longitude: pickup_lng });
+            setDropoffCoords({ latitude: dropoff_lat, longitude: dropoff_lng });
+
+            // Allow state updates to settle then start ride
+            setTimeout(() => remoteStartRide(command.payload), 1000);
+          }
+          break;
+        case 'COMPLETE_RIDE':
+          await completeRide();
+          break;
+      }
+
+      // Mark as executed
+      await supabase.from('device_commands').update({ status: 'executed' }).eq('id', command.id);
+
+    } catch (err) {
+      console.error('COMMAND_EXECUTION_ERROR:', err);
+      await supabase.from('device_commands').update({ status: 'failed' }).eq('id', command.id);
+    }
+  };
 
   useEffect(() => {
     if (pickupCoords && dropoffCoords) {
       calculateEstimate();
     }
   }, [pickupCoords, dropoffCoords]);
+
+  // Helper for remote start to use passed payload directly
+  const remoteStartRide = async (payload) => {
+    // Use payload data directly to avoid stale state issues during remote execution
+    const { pickup, dropoff, items, price, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng } = payload;
+
+    const { data, error } = await supabase.from('rides').insert({
+      vehicle_id: vehicleId,
+      pickup_location: pickup,
+      pickup_lat: pickup_lat,
+      pickup_lng: pickup_lng,
+      dropoff_location: dropoff,
+      dropoff_lat: dropoff_lat,
+      dropoff_lng: dropoff_lng,
+      items: items,
+      price: parseFloat(price),
+      status: 'ongoing',
+      started_at: new Date().toISOString()
+    }).select().single();
+
+    if (error) return;
+
+    await AsyncStorage.setItem('active_ride_id', data.id);
+    setActiveRide(data);
+    setAppState('ACTIVE_RIDE');
+    startLocationTracking();
+    startForegroundWatching();
+  };
 
   const calculateEstimate = async () => {
     try {
@@ -438,7 +548,20 @@ export default function App() {
               </View>
 
               <TextInput style={styles.formInput} placeholder="Items (e.g. Bread, Furniture)" placeholderTextColor="#94a3b8" value={items} onChangeText={setItems} />
-              <TextInput style={styles.formInput} placeholder="Price (₦)" keyboardType="numeric" placeholderTextColor="#94a3b8" value={price} onChangeText={setPrice} />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Price (₦)"
+                  keyboardType="numeric"
+                  placeholderTextColor="#94a3b8"
+                  value={price}
+                  onChangeText={setPrice}
+                  secureTextEntry={!isPriceVisible}
+                />
+                <TouchableOpacity onPress={() => setIsPriceVisible(!isPriceVisible)} style={styles.eyeButton}>
+                  <Text style={styles.eyeText}>{isPriceVisible ? 'HIDE' : 'SHOW'}</Text>
+                </TouchableOpacity>
+              </View>
 
               {estimatedTime && (
                 <View style={styles.estimateBanner}>
@@ -523,6 +646,10 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#ffffff', fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   formCard: { backgroundColor: '#1e293b', padding: 20, borderRadius: 16 },
   formInput: { backgroundColor: '#0f172a', color: '#ffffff', padding: 14, borderRadius: 8, marginBottom: 12, fontWeight: 'bold' },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 8, marginBottom: 12, paddingRight: 14, borderWidth: 1, borderColor: '#0f172a' },
+  passwordInput: { flex: 1, color: '#ffffff', padding: 14, fontWeight: 'bold' },
+  eyeButton: { padding: 8 },
+  eyeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
   startButton: { backgroundColor: '#10b981', padding: 18, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   map: { flex: 1 },
   mapSelectionContainer: { height: 350, backgroundColor: '#1e293b', borderRadius: 16, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: '#334155' },
